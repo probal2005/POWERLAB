@@ -15,7 +15,7 @@ import { useContent } from '@/context/ContentContext';
 
 export default function HomePage() {
   const { t, language } = useLanguage();
-  const { laws, categories } = useContent();
+  const { laws, categories, loading, error } = useContent();
   const featuredNumbers = [1, 3, 5, 25, 35, 48];
   const featured = laws.filter(
     (law) => law.isPublished !== false && featuredNumbers.includes(law.number)
@@ -59,7 +59,7 @@ export default function HomePage() {
                 </div>
                 <div className="h-8 w-px bg-line" />
                 <div>
-                  <div className="font-display text-2xl text-forest-600">{categories.length}</div>
+                  <div className="font-display text-2xl text-forest-600">{loading || error ? '—' : categories.length}</div>
                   <div className="mt-0.5">{t('Categories', 'বিভাগ')}</div>
                 </div>
               </div>

@@ -8,7 +8,7 @@ type SortKey = 'number' | 'title';
 
 export default function LawsPage() {
   const { t, language } = useLanguage();
-  const { laws, categories } = useContent();
+  const { laws, categories, loading, error } = useContent();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [sort, setSort] = useState<SortKey>('number');
@@ -129,7 +129,7 @@ export default function LawsPage() {
         <div className="container-content py-10 md:py-12">
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm text-ink-muted">
-              {filtered.length} {t('of', 'এর মধ্যে')} 48 {t('laws', 'নিয়ম')}
+              {loading ? '—' : filtered.length} {t('of', 'এর মধ্যে')} 48 {t('laws', 'নিয়ম')}
               {activeCat && ` · ${language === 'en' ? activeCat.labelEn : activeCat.labelBn}`}
             </p>
             {(query || category !== 'all') && (
@@ -142,7 +142,15 @@ export default function LawsPage() {
             )}
           </div>
 
-          {filtered.length === 0 ? (
+          {loading ? (
+            <p role="status" className="border-t border-line py-16 text-center text-sm text-ink-muted">
+              {t('Loading the law directory…', 'নিয়মের তালিকা লোড হচ্ছে…')}
+            </p>
+          ) : error ? (
+            <p role="alert" className="border-t border-line py-16 text-center text-sm text-error">
+              {t('The law directory could not be loaded. Please refresh the page and try again.', 'নিয়মের তালিকা লোড হয়নি। পৃষ্ঠাটি রিফ্রেশ করে আবার চেষ্টা করুন।')}
+            </p>
+          ) : filtered.length === 0 ? (
             <div className="py-24 text-center">
               <p className="font-display text-xl text-ink">{t('No laws match your search.', 'আপনার অনুসন্ধানে কোনো নিয়ম মেলে নি।')}</p>
               <p className="mt-2 text-sm text-ink-muted">{t('Try a different keyword or reset the filters.', 'ভিন্ন কীওয়ার্ড চেষ্টা করুন বা ফিল্টার পুনঃস্থাপন করুন।')}</p>

@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Category, Law, LawSection } from '@/types/law';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
 
 type ContentContextValue = {
   laws: Law[];
@@ -42,7 +41,6 @@ function toDatabase(law: Law) {
 }
 
 export function ContentProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
   const [content, setContent] = useState<ContentPayload>({ laws: [], categories: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +64,8 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh, user?.id]);
+  // Published content is shared across roles, so auth changes must not refetch it.
+  useEffect(() => { void refresh(); }, [refresh]);
 
   const commit = useCallback(async (operation: () => PromiseLike<{ error: { message: string } | null }>) => {
     const result = await operation();

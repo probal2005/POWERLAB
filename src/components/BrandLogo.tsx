@@ -15,13 +15,16 @@ export default function BrandLogo({
   className = '',
 }: BrandLogoProps) {
   return (
-    <img
-      src="/powerlab-logo.png"
-      alt="POWERLAB — Knowledge, Commands, Influence"
-      className={`block shrink-0 object-contain ${variantStyles[variant]} ${className}`}
-      width="1774"
-      height="887"
-      draggable={false}
-    />
+    <picture className="block shrink-0">
+      <source srcSet="/powerlab-logo.webp" type="image/webp" />
+      <img
+        src="/powerlab-logo.png"
+        alt="POWERLAB — Knowledge, Commands, Influence"
+        className={`block shrink-0 object-contain ${variantStyles[variant]} ${className}`}
+        width="448"
+        height="224"
+        draggable={false}
+      />
+    </picture>
   );
 }
