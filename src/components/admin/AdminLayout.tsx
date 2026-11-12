@@ -20,6 +20,7 @@ const navigation = [
   { label: 'Laws & Lessons', path: '/admin/laws', icon: BookOpen },
   { label: 'Categories', path: '/admin/categories', icon: Tags },
   { label: 'Assessments', path: '/admin/assessments', icon: ClipboardList },
+  { label: 'Certification', path: '/admin/certification', icon: ClipboardList },
   { label: 'Users', path: '/admin/users', icon: Users },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
 ];

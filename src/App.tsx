@@ -26,6 +26,13 @@ const AdminDashboardPage = lazy(
 const AdminSectionPage = lazy(
   () => import('@/pages/admin/AdminSectionPage')
 );
+const AdminCertificationPage = lazy(
+  () => import('@/pages/admin/AdminCertificationPage')
+);
+const CertificationPage = lazy(() => import('@/pages/CertificationPage'));
+const CertificateVerificationPage = lazy(
+  () => import('@/pages/CertificateVerificationPage')
+);
 const AdminLawsPage = lazy(
   () => import('@/pages/admin/AdminLawsPage')
 );
@@ -60,6 +67,7 @@ export default function App() {
                   <Route path="/laws" element={<LawsPage />} />
                   <Route path="/laws/:slug" element={<LessonPage />} />
                   <Route path="/about" element={<AboutPage />} />
+                  <Route path="/verify-certificate" element={<CertificateVerificationPage />} />
 
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
@@ -81,12 +89,14 @@ export default function App() {
                     path="/student"
                     element={<StudentDashboardPage />}
                   />
+                  <Route path="/certification" element={<CertificationPage />} />
                 </Route>
 
                 <Route element={<ProtectedRoute requiredRole="admin" />}>
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="laws" element={<AdminLawsPage />} />
+                    <Route path="certification" element={<AdminCertificationPage />} />
                     <Route path="categories" element={<AdminSectionPage />} />
                     <Route path="assessments" element={<AdminSectionPage />} />
                     <Route path="users" element={<AdminSectionPage />} />

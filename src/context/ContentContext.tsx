@@ -20,6 +20,21 @@ type ContentContextValue = {
 
 const ContentContext = createContext<ContentContextValue | undefined>(undefined);
 type ContentPayload = { laws: Law[]; categories: Category[] };
+const CONTENT_CACHE_KEY = 'powerlab:shared-content:v1';
+const CONTENT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function readCachedContent(): ContentPayload | null {
+  try {
+    const raw = sessionStorage.getItem(CONTENT_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { savedAt?: number; content?: ContentPayload };
+    if (!cached.savedAt || Date.now() - cached.savedAt > CONTENT_CACHE_TTL_MS) return null;
+    if (!Array.isArray(cached.content?.laws) || !Array.isArray(cached.content?.categories)) return null;
+    return cached.content;
+  } catch {
+    return null;
+  }
+}
 
 function fromDatabase(row: Record<string, unknown>): Law {
   return {
@@ -41,12 +56,13 @@ function toDatabase(law: Law) {
 }
 
 export function ContentProvider({ children }: { children: ReactNode }) {
-  const [content, setContent] = useState<ContentPayload>({ laws: [], categories: [] });
-  const [loading, setLoading] = useState(true);
+  const [content, setContent] = useState<ContentPayload>(() => readCachedContent() ?? { laws: [], categories: [] });
+  const [loading, setLoading] = useState(() => readCachedContent() === null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    const hasCachedContent = readCachedContent() !== null;
+    if (!hasCachedContent) setLoading(true);
     const { data, error: loadError } = await supabase.rpc('get_powerlab_content');
     if (loadError) {
       setError(`Could not load shared POWERLAB content: ${loadError.message}`);
@@ -54,12 +70,14 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       return;
     }
     const payload = data as { laws?: Record<string, unknown>[]; categories?: Record<string, unknown>[] };
-    setContent({
+    const nextContent = {
       laws: (payload.laws ?? []).map(fromDatabase),
       categories: (payload.categories ?? []).map((category) => ({
         id: String(category.id), labelEn: String(category.label_en), labelBn: String(category.label_bn),
       })),
-    });
+    };
+    setContent(nextContent);
+    try { sessionStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), content: nextContent })); } catch { /* storage can be disabled or full */ }
     setError(null);
     setLoading(false);
   }, []);

@@ -176,6 +176,11 @@ export default function StudentDashboardPage() {
           </Link>
         </section>
 
+        <Link to="/certification" className="flex flex-col gap-3 border border-line bg-surface p-6 transition-colors hover:border-forest-300 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+          <div><p className="eyebrow text-bronze-600">POWERLAB</p><h2 className="mt-2 font-display text-2xl text-ink">Certification programme</h2><p className="mt-2 text-sm text-ink-muted">Review your module readiness, completion, final assessment, and certificate status.</p></div>
+          <span className="btn-secondary w-fit">View certification</span>
+        </Link>
+
         {learningError && <p role="status" className="border border-bronze-200 bg-bronze-50 p-4 text-sm text-ink-muted">{learningError}</p>}
 
         <section className="grid gap-6 lg:grid-cols-2">

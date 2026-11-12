@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, ClipboardCheck, Construction, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, Construction, Plus, Save, Search, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { useContent } from '@/context/ContentContext';
+import { supabase } from '@/lib/supabase';
+import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
 
 const sections: Record<
   string,
@@ -46,6 +48,8 @@ export default function AdminSectionPage() {
 
   if (key === 'categories') return <CategoryManager />;
   if (key === 'assessments') return <AssessmentManager />;
+  if (key === 'users') return <UserManager />;
+  if (key === 'settings') return <AdminSettingsPage />;
 
   if (!section) {
     return (
@@ -193,4 +197,67 @@ function AssessmentManager() {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return <div className="border border-line bg-surface p-5"><p className="font-display text-3xl text-ink">{value}</p><p className="mt-1 text-xs text-ink-muted">{label}</p></div>;
+}
+
+type ManagedUser = { id: string; email: string | null; full_name: string; role: 'student' | 'admin'; created_at: string };
+
+function UserManager() {
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  async function loadUsers() {
+    setLoading(true);
+    setError('');
+    const { data, error: requestError } = await supabase.functions.invoke('powerlab-admin-users', { body: { action: 'list' } });
+    if (requestError) {
+      setError(requestError.message || 'Could not load user accounts.');
+      setUsers([]);
+    } else {
+      setUsers((data?.users ?? []) as ManagedUser[]);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => { void loadUsers(); }, []);
+
+  async function changeRole(user: ManagedUser, role: ManagedUser['role']) {
+    if (user.role === role) return;
+    const action = role === 'admin' ? 'promote to administrator' : 'change to student';
+    if (!window.confirm(`Are you sure you want to ${action} ${user.email || user.full_name || 'this account'}?`)) return;
+    setSavingId(user.id);
+    setError('');
+    setMessage('');
+    const { error: requestError } = await supabase.functions.invoke('powerlab-admin-users', { body: { action: 'update-role', userId: user.id, role } });
+    if (requestError) {
+      setError(requestError.message || 'Could not update the account role.');
+    } else {
+      setUsers((current) => current.map((item) => item.id === user.id ? { ...item, role } : item));
+      setMessage('Account role updated.');
+    }
+    setSavingId('');
+  }
+
+  const filtered = users.filter((user) => `${user.full_name} ${user.email ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return <div className="animate-fade-up space-y-7">
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-8">
+      <div><p className="eyebrow text-bronze-600">Administration</p><h1 className="mt-3 font-display text-3xl tracking-tight text-ink sm:text-4xl">Users</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">Review POWERLAB accounts and manage administrator access.</p></div>
+      <div className="flex h-10 items-center gap-2 border border-line bg-surface px-3 text-xs text-ink-muted"><ShieldCheck size={16} className="text-forest-700" />Protected administrator access</div>
+    </div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <label className="relative block w-full sm:max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" /><input className="field-input pl-9" aria-label="Search users" placeholder="Search name or email" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <p className="text-sm text-ink-muted">{users.length} accounts</p>
+    </div>
+    {(error || message) && <p role={error ? 'alert' : 'status'} className={`border p-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || message}</p>}
+    <div className="divide-y divide-line border border-line bg-surface">
+      {loading ? <p className="p-6 text-sm text-ink-muted">Loading accounts…</p> : filtered.length === 0 ? <p className="p-6 text-sm text-ink-muted">{users.length ? 'No accounts match your search.' : 'No user accounts were found.'}</p> : filtered.map((user) => <article key={user.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-canvas-2 text-forest-700"><UserRound size={18} /></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink">{user.full_name || 'Name not provided'}</p><p className="mt-1 break-all text-xs text-ink-muted">{user.email || 'Email unavailable'}</p><p className="mt-1 text-[11px] text-ink-muted">Joined {new Date(user.created_at).toLocaleDateString()}</p></div></div>
+        <label className="flex items-center gap-3 text-xs text-ink-muted">Role<select className="field-input w-auto" aria-label={`Role for ${user.email || user.full_name}`} value={user.role} disabled={savingId === user.id} onChange={(event) => void changeRole(user, event.target.value as ManagedUser['role'])}><option value="student">Student</option><option value="admin">Administrator</option></select>{savingId === user.id && <span>Saving…</span>}</label>
+      </article>)}
+    </div>
+  </div>;
 }
