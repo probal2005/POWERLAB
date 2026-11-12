@@ -35,7 +35,7 @@ const WIDTH_MAP: Record<ReadWidth, string> = {
 export default function LessonPage() {
   const { slug } = useParams<{ slug: string }>();
   const { language, setLanguage, t } = useLanguage();
-  const { laws, categories } = useContent();
+  const { laws, categories, loading } = useContent();
   const { user } = useAuth();
 
   const law = useMemo(
@@ -148,6 +148,15 @@ export default function LessonPage() {
     });
     return () => observer.disconnect();
   }, [sections]);
+
+  if (!law && loading) {
+    return (
+      <div className="container-content flex items-center justify-center py-32" role="status" aria-live="polite">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-forest-300 border-t-forest-600" aria-hidden="true" />
+        <span className="sr-only">Loading lesson</span>
+      </div>
+    );
+  }
 
   if (!law) {
     return <Navigate to="/laws" replace />;
