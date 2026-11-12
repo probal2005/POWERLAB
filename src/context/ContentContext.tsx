@@ -10,6 +10,7 @@ type ContentContextValue = {
   getSections: (slug: string) => LawSection[] | undefined;
   addLaw: (law: Law) => Promise<void>;
   updateLaw: (slug: string, updates: Partial<Law>) => Promise<void>;
+  swapLawNumbers: (firstSlug: string, secondSlug: string) => Promise<void>;
   deleteLaw: (slug: string) => Promise<void>;
   reorderLaws: (orderedSlugs: string[]) => Promise<void>;
   addCategory: (category: Category) => Promise<void>;
@@ -103,6 +104,25 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     if (!current) return Promise.reject(new Error('Law not found'));
     return commit(() => supabase.from('content_laws').update(toDatabase({ ...current, ...updates })).eq('slug', slug));
   }, [commit, content.laws]);
+  const swapLawNumbers = useCallback(async (firstSlug: string, secondSlug: string) => {
+    const first = content.laws.find((law) => law.slug === firstSlug);
+    const second = content.laws.find((law) => law.slug === secondSlug);
+    if (!first || !second) throw new Error('Could not find both laws to reorder.');
+
+    const results = await Promise.all([
+      supabase.from('content_laws').update({ number: second.number, sort_order: second.number }).eq('slug', first.slug),
+      supabase.from('content_laws').update({ number: first.number, sort_order: first.number }).eq('slug', second.slug),
+    ]);
+    const updateError = results.find((result) => result.error)?.error;
+    if (updateError) {
+      setError(`Could not reorder shared content: ${updateError.message}`);
+      await refresh();
+      throw new Error(updateError.message);
+    }
+    if (!await refresh()) {
+      throw new Error('The order was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
+    }
+  }, [content.laws, refresh]);
   const deleteLaw = useCallback((slug: string) => commit(() => supabase.from('content_laws').delete().eq('slug', slug)), [commit]);
   const reorderLaws = useCallback(async (slugs: string[]) => {
     const current = new Map(content.laws.map((law) => [law.slug, law]));
@@ -141,7 +161,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getSections = useCallback((slug: string) => content.laws.find((law) => law.slug === slug)?.sections, [content.laws]);
-  const value = useMemo(() => ({ ...content, loading, error, getSections, addLaw, updateLaw, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent }), [content, loading, error, getSections, addLaw, updateLaw, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent]);
+  const value = useMemo(() => ({ ...content, loading, error, getSections, addLaw, updateLaw, swapLawNumbers, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent }), [content, loading, error, getSections, addLaw, updateLaw, swapLawNumbers, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent]);
   return <ContentContext.Provider value={value}>{children}</ContentContext.Provider>;
 }
 

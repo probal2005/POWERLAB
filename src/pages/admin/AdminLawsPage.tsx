@@ -111,6 +111,7 @@ export default function AdminLawsPage() {
     categories,
     addLaw,
     updateLaw,
+    swapLawNumbers,
     deleteLaw,
   } = useContent();
 
@@ -523,10 +524,7 @@ export default function AdminLawsPage() {
     const other = orderedLaws[target];
 
     try {
-      await Promise.all([
-        updateLaw(law.slug, { number: other.number }),
-        updateLaw(other.slug, { number: law.number }),
-      ]);
+      await swapLawNumbers(law.slug, other.slug);
     } catch (orderError) {
       setError(orderError instanceof Error ? orderError.message : 'Unable to reorder laws.');
     }
