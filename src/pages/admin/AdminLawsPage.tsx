@@ -335,7 +335,7 @@ export default function AdminLawsPage() {
     );
   };
 
-  const saveLaw = () => {
+  const saveLaw = async () => {
     if (!editor) return;
 
     const number = Number(editor.number);
@@ -467,35 +467,41 @@ export default function AdminLawsPage() {
 
     try {
       if (editor.originalSlug) {
-        updateLaw(editor.originalSlug, law);
+        await updateLaw(editor.originalSlug, law);
       } else {
-        addLaw(law);
+        await addLaw(law);
       }
 
       setEditor(null);
       setError('');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save law content.');
     } finally {
       setSaving(false);
     }
   };
 
-  const togglePublished = (law: Law) => {
-    updateLaw(law.slug, {
+  const togglePublished = async (law: Law) => {
+    try { await updateLaw(law.slug, {
       isPublished: law.isPublished === false,
-    });
-  };
-
-  const removeLaw = (law: Law) => {
-    const confirmed = window.confirm(
-      `Delete Law ${law.number}: ${law.titleEn}?\n\nThis also removes its lesson content from this browser's local content store.`
-    );
-
-    if (confirmed) {
-      deleteLaw(law.slug);
+    }); } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : 'Unable to update publication status.');
     }
   };
 
-  const moveLaw = (law: Law, direction: -1 | 1) => {
+  const removeLaw = async (law: Law) => {
+    const confirmed = window.confirm(
+      `Delete Law ${law.number}: ${law.titleEn}?\n\nThis removes the shared lesson content.`
+    );
+
+    if (confirmed) {
+      try { await deleteLaw(law.slug); } catch (deleteError) {
+        setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete law.');
+      }
+    }
+  };
+
+  const moveLaw = async (law: Law, direction: -1 | 1) => {
     const index = orderedLaws.findIndex((item) => item.slug === law.slug);
     const target = index + direction;
 
@@ -503,8 +509,14 @@ export default function AdminLawsPage() {
 
     const other = orderedLaws[target];
 
-    updateLaw(law.slug, { number: other.number });
-    updateLaw(other.slug, { number: law.number });
+    try {
+      await Promise.all([
+        updateLaw(law.slug, { number: other.number }),
+        updateLaw(other.slug, { number: law.number }),
+      ]);
+    } catch (orderError) {
+      setError(orderError instanceof Error ? orderError.message : 'Unable to reorder laws.');
+    }
   };
 
   return (

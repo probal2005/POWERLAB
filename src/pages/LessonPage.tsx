@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useContent } from '@/context/ContentContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 type FontSize = 'sm' | 'md' | 'lg';
 type ReadWidth = 'narrow' | 'normal' | 'wide';
@@ -34,6 +36,7 @@ export default function LessonPage() {
   const { slug } = useParams<{ slug: string }>();
   const { language, setLanguage, t } = useLanguage();
   const { laws, categories } = useContent();
+  const { user } = useAuth();
 
   const law = useMemo(
     () => laws.find((item) => item.slug === slug && item.isPublished !== false),
@@ -58,9 +61,19 @@ export default function LessonPage() {
     setActiveSection(0);
   }, [slug]);
 
-  // Restore bookmark/completed flags from localStorage
+  // Restore learning state from the account when signed in, with local fallback for guests.
   useEffect(() => {
     if (!slug) return;
+    if (user) {
+      void Promise.all([
+        supabase.from('student_bookmarks').select('law_slug').eq('user_id', user.id).eq('law_slug', slug).maybeSingle(),
+        supabase.from('student_law_progress').select('status').eq('user_id', user.id).eq('law_slug', slug).maybeSingle(),
+      ]).then(([bookmark, progress]) => {
+        if (!bookmark.error) setBookmarked(Boolean(bookmark.data));
+        if (!progress.error) setCompleted(progress.data?.status === 'completed');
+      });
+      return;
+    }
     try {
       const bm = JSON.parse(localStorage.getItem('powerlab:bookmarks') || '[]');
       setBookmarked(bm.includes(slug));
@@ -69,10 +82,19 @@ export default function LessonPage() {
     } catch {
       /* ignore */
     }
-  }, [slug]);
+  }, [slug, user]);
 
   const persistBookmark = (next: boolean) => {
     if (!slug) return;
+    if (user) {
+      const request = next
+        ? supabase.from('student_bookmarks').insert({ user_id: user.id, law_slug: slug })
+        : supabase.from('student_bookmarks').delete().eq('user_id', user.id).eq('law_slug', slug);
+      void request.then(({ error }) => {
+        if (error) console.error('Bookmark could not be saved:', error.message);
+      });
+      return;
+    }
     try {
       const bm: string[] = JSON.parse(localStorage.getItem('powerlab:bookmarks') || '[]');
       const updated = next ? [...new Set([...bm, slug])] : bm.filter((s) => s !== slug);
@@ -82,12 +104,28 @@ export default function LessonPage() {
 
   const persistCompleted = (next: boolean) => {
     if (!slug) return;
+    if (user) {
+      void supabase.from('student_law_progress').upsert({
+        user_id: user.id, law_slug: slug, status: next ? 'completed' : 'in_progress',
+        completed_at: next ? new Date().toISOString() : null, last_viewed_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,law_slug' }).then(({ error }) => {
+        if (error) console.error('Learning progress could not be saved:', error.message);
+      });
+      return;
+    }
     try {
       const cmp: string[] = JSON.parse(localStorage.getItem('powerlab:completed') || '[]');
       const updated = next ? [...new Set([...cmp, slug])] : cmp.filter((s) => s !== slug);
       localStorage.setItem('powerlab:completed', JSON.stringify(updated));
     } catch { /* ignore */ }
   };
+
+  useEffect(() => {
+    if (!slug || !user) return;
+    void supabase.from('student_law_progress').upsert({
+      user_id: user.id, law_slug: slug, last_viewed_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,law_slug', ignoreDuplicates: true });
+  }, [slug, user]);
 
   // Scroll-spy for active TOC highlight
   useEffect(() => {
