@@ -143,9 +143,9 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
               'এই মূল্যায়নের ঠিকানার সঙ্গে সম্পর্কিত কোনো প্রকাশিত নিয়ম খুঁজে পাওয়া যায়নি।'
             )}
           </p>
-          <Link to="/laws" className="btn-primary mt-7">
+          <Link to="/assessments" className="btn-primary mt-7">
             <ArrowLeft className="h-4 w-4" />
-            {t('Explore all laws', 'সব নিয়ম দেখুন')}
+            {t('View assessments', 'মূল্যায়ন দেখুন')}
           </Link>
         </div>
       </section>
@@ -279,9 +279,9 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
               )}
 
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                <Link to="/laws" className="btn-primary">
+                <Link to="/assessments" className="btn-primary">
                   <BookOpen className="h-4 w-4" />
-                  {t('Continue reading', 'পড়া চালিয়ে যান')}
+                  {t('View assessments', 'মূল্যায়ন দেখুন')}
                 </Link>
 
                 {!final && law && (

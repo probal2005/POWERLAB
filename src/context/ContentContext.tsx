@@ -67,7 +67,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     if (loadError) {
       setError(`Could not load shared POWERLAB content: ${loadError.message}`);
       setLoading(false);
-      return;
+      return false;
     }
     const payload = data as { laws?: Record<string, unknown>[]; categories?: Record<string, unknown>[] };
     const nextContent = {
@@ -80,6 +80,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     try { sessionStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), content: nextContent })); } catch { /* storage can be disabled or full */ }
     setError(null);
     setLoading(false);
+    return true;
   }, []);
 
   // Published content is shared across roles, so auth changes must not refetch it.
@@ -91,7 +92,9 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       setError(`Could not save shared content: ${result.error.message}`);
       throw new Error(result.error.message);
     }
-    await refresh();
+    if (!await refresh()) {
+      throw new Error('The change was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
+    }
   }, [refresh]);
 
   const addLaw = useCallback((law: Law) => commit(() => supabase.from('content_laws').insert(toDatabase(law))), [commit]);
@@ -103,11 +106,28 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   const deleteLaw = useCallback((slug: string) => commit(() => supabase.from('content_laws').delete().eq('slug', slug)), [commit]);
   const reorderLaws = useCallback(async (slugs: string[]) => {
     const current = new Map(content.laws.map((law) => [law.slug, law]));
-    for (let i = 0; i < slugs.length; i += 1) {
-      const law = current.get(slugs[i]);
-      if (law) await commit(() => supabase.from('content_laws').update({ sort_order: i + 1 }).eq('slug', law.slug));
+    const updates = slugs.flatMap((slug, index) => {
+      const law = current.get(slug);
+      return law ? [{ slug: law.slug, sortOrder: index + 1 }] : [];
+    });
+
+    // Avoid reloading the complete 48-law payload after every row update.
+    for (let start = 0; start < updates.length; start += 8) {
+      const batch = updates.slice(start, start + 8);
+      const results = await Promise.all(batch.map(({ slug, sortOrder }) =>
+        supabase.from('content_laws').update({ sort_order: sortOrder }).eq('slug', slug)
+      ));
+      const updateError = results.find((result) => result.error)?.error;
+      if (updateError) {
+        setError(`Could not reorder shared content: ${updateError.message}`);
+        await refresh();
+        throw new Error(updateError.message);
+      }
     }
-  }, [commit, content.laws]);
+    if (!await refresh()) {
+      throw new Error('The order was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
+    }
+  }, [content.laws, refresh]);
   const addCategory = useCallback((category: Category) => commit(() => supabase.from('content_categories').insert({ id: category.id, label_en: category.labelEn, label_bn: category.labelBn })), [commit]);
   const updateCategory = useCallback((id: string, updates: Partial<Category>) => {
     const current = content.categories.find((category) => category.id === id);

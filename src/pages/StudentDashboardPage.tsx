@@ -154,7 +154,7 @@ export default function StudentDashboardPage() {
           </Link>
 
           <Link
-            to="/laws"
+            to="/assessments"
             className="group border border-line bg-surface p-6 transition-colors hover:border-forest-300 sm:p-8"
           >
             <div className="flex h-12 w-12 items-center justify-center bg-canvas-2 text-forest-700">

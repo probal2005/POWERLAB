@@ -11,6 +11,7 @@ const HomePage = lazy(() => import('@/pages/HomePage'));
 const LawsPage = lazy(() => import('@/pages/LawsPage'));
 const LessonPage = lazy(() => import('@/pages/LessonPage'));
 const AboutPage = lazy(() => import('@/pages/AboutPage'));
+const AssessmentsPage = lazy(() => import('@/pages/AssessmentsPage'));
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/RegisterPage'));
 const StudentDashboardPage = lazy(
@@ -67,15 +68,12 @@ export default function App() {
                   <Route path="/laws" element={<LawsPage />} />
                   <Route path="/laws/:slug" element={<LessonPage />} />
                   <Route path="/about" element={<AboutPage />} />
+                  <Route path="/assessments" element={<AssessmentsPage />} />
                   <Route path="/verify-certificate" element={<CertificateVerificationPage />} />
 
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
 
-                  <Route
-                    path="/assessment/final"
-                    element={<AssessmentPage final />}
-                  />
                   <Route
                     path="/assessment/:lawSlug"
                     element={<AssessmentPage />}
@@ -90,6 +88,7 @@ export default function App() {
                     element={<StudentDashboardPage />}
                   />
                   <Route path="/certification" element={<CertificationPage />} />
+                  <Route path="/assessment/final" element={<CertificationPage />} />
                 </Route>
 
                 <Route element={<ProtectedRoute requiredRole="admin" />}>

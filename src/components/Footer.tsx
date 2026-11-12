@@ -26,7 +26,7 @@ export default function Footer() {
             <ul className="space-y-3 text-sm">
               <li><Link to="/laws" className="text-ink/80 hover:text-forest-600 transition-colors">{t('All 48 Laws', '৪৮ নিয়ম')}</Link></li>
               <li><Link to="/about" className="text-ink/80 hover:text-forest-600 transition-colors">{t('About', 'পরিচিতি')}</Link></li>
-              <li><Link to="/assessment/final" className="text-ink/80 hover:text-forest-600 transition-colors">{t('Final Assessment', 'চূড়ান্ত মূল্যায়ন')}</Link></li>
+              <li><Link to="/assessments" className="text-ink/80 hover:text-forest-600 transition-colors">{t('Assessments', 'মূল্যায়ন')}</Link></li>
             </ul>
           </div>
 
