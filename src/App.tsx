@@ -48,10 +48,10 @@ function PublicLayout() {
 
 export default function App() {
   return (
-    <ContentProvider>
-      <LanguageProvider>
-        <BrowserRouter>
-          <AuthProvider>
+    <AuthProvider>
+      <ContentProvider>
+        <LanguageProvider>
+          <BrowserRouter>
             <ScrollToTop />
             <Suspense fallback={<PageFallback />}>
               <Routes>
@@ -95,9 +95,9 @@ export default function App() {
                 </Route>
               </Routes>
             </Suspense>
-          </AuthProvider>
-        </BrowserRouter>
-      </LanguageProvider>
-    </ContentProvider>
+          </BrowserRouter>
+        </LanguageProvider>
+      </ContentProvider>
+    </AuthProvider>
   );
 }

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useContent } from '@/context/ContentContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import type { AssessmentQuestion } from '@/types/law';
 
 interface AssessmentPageProps {
@@ -26,41 +28,14 @@ interface AssessmentAttempt {
   percentage: number;
   passed: boolean;
   answers: number[];
-}
-
-function getHistoryKey(slug: string) {
-  return `powerlab:assessment-attempts:v1:${encodeURIComponent(slug)}`;
-}
-
-function readAttempts(slug?: string): AssessmentAttempt[] {
-  if (!slug || typeof window === 'undefined') return [];
-
-  try {
-    const raw = window.localStorage.getItem(getHistoryKey(slug));
-    if (!raw) return [];
-
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(
-      (item): item is AssessmentAttempt =>
-        typeof item === 'object' &&
-        item !== null &&
-        typeof item.id === 'string' &&
-        typeof item.timestamp === 'string' &&
-        typeof item.percentage === 'number' &&
-        typeof item.passed === 'boolean' &&
-        Array.isArray(item.answers)
-    );
-  } catch {
-    return [];
-  }
+  reviewCorrect?: boolean[];
 }
 
 export default function AssessmentPage({ final = false }: AssessmentPageProps) {
   const { lawSlug } = useParams<{ lawSlug: string }>();
   const { t, language } = useLanguage();
   const { laws } = useContent();
+  const { user } = useAuth();
 
   const law = final
     ? undefined
@@ -82,16 +57,30 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
     Array(questions.length).fill(-1)
   );
   const [result, setResult] = useState<AssessmentAttempt | null>(null);
-  const [history, setHistory] = useState<AssessmentAttempt[]>(() =>
-    readAttempts(lawSlug)
-  );
+  const [history, setHistory] = useState<AssessmentAttempt[]>([]);
 
   useEffect(() => {
     setCurrentQuestion(0);
     setAnswers(Array(questions.length).fill(-1));
     setResult(null);
-    setHistory(readAttempts(lawSlug));
+    setHistory([]);
   }, [lawSlug, final, questions.length]);
+
+  useEffect(() => {
+    if (!user || !lawSlug || final) return;
+    void supabase.from('student_assessment_attempts')
+      .select('id, law_slug, created_at, score, percentage, passed, answers')
+      .eq('user_id', user.id).eq('law_slug', lawSlug)
+      .order('created_at', { ascending: false }).limit(20)
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        setHistory(data.map((item) => ({
+          id: item.id, lawSlug: item.law_slug, timestamp: item.created_at,
+          score: item.score, percentage: item.percentage, passed: item.passed,
+          answers: item.answers as number[],
+        })));
+      });
+  }, [user, lawSlug, final]);
 
   const question = questions[currentQuestion];
   const selectedCount = answers.filter((answer) => answer !== -1).length;
@@ -108,41 +97,25 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
     );
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isAssessmentPublished || !allAnswered || result || !law) return;
-
-    const score = questions.reduce(
-      (total, item, index) =>
-        total + (answers[index] === item.correctOption ? 1 : 0),
-      0
-    );
-
-    const percentage = Math.round((score / questions.length) * 100);
-    const passPercentage = assessment?.passPercentage ?? 60;
-
-    const attempt: AssessmentAttempt = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      lawSlug: law.slug,
-      timestamp: new Date().toISOString(),
-      score,
-      percentage,
-      passed: percentage >= passPercentage,
-      answers: [...answers],
-    };
-
-    setResult(attempt);
-
-    const updatedHistory = [attempt, ...history].slice(0, 20);
-    setHistory(updatedHistory);
-
-    try {
-      window.localStorage.setItem(
-        getHistoryKey(law.slug),
-        JSON.stringify(updatedHistory)
-      );
-    } catch {
-      // The current result remains available even if browser storage is unavailable.
+    if (!user) {
+      window.alert(t('Sign in to submit and save your assessment.', 'মূল্যায়ন জমা ও সংরক্ষণ করতে সাইন ইন করুন।'));
+      return;
     }
+
+    const { data, error } = await supabase.rpc('submit_law_assessment', {
+      p_law_slug: law.slug,
+      p_answers: answers,
+    });
+    if (error) {
+      window.alert(`Could not submit assessment: ${error.message}`);
+      return;
+    }
+    const saved = data as Omit<AssessmentAttempt, 'lawSlug'>;
+    const attempt: AssessmentAttempt = { ...saved, lawSlug: law.slug };
+    setResult(attempt);
+    setHistory((previous) => [attempt, ...previous].slice(0, 20));
   };
 
   const handleRetry = () => {
@@ -553,8 +526,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                     <div className="mt-7 space-y-7">
                       {questions.map((item, index) => {
                         const selectedAnswer = result.answers[index];
-                        const isCorrect =
-                          selectedAnswer === item.correctOption;
+                        const isCorrect = result.reviewCorrect?.[index] ?? false;
                         const options =
                           language === 'en'
                             ? item.optionsEn
@@ -585,8 +557,6 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
 
                             <div className="mt-4 space-y-2 pl-8">
                               {options.map((option, optionIndex) => {
-                                const isCorrectOption =
-                                  optionIndex === item.correctOption;
                                 const isChosen =
                                   optionIndex === selectedAnswer;
 
@@ -594,7 +564,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                   <div
                                     key={optionIndex}
                                     className={`border px-3 py-3 text-sm ${
-                                      isCorrectOption
+                                      isChosen && isCorrect
                                         ? 'border-forest-300 bg-forest-500/10 text-forest-800'
                                         : isChosen
                                           ? 'border-red-300 bg-red-500/10 text-red-800'
@@ -605,14 +575,11 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                       {String.fromCharCode(65 + optionIndex)}.
                                     </span>
                                     {option}
-                                    {isCorrectOption && (
+                                    {isChosen && (
                                       <span className="ml-2 text-xs font-semibold">
-                                        {t('Correct answer', 'সঠিক উত্তর')}
-                                      </span>
-                                    )}
-                                    {isChosen && !isCorrectOption && (
-                                      <span className="ml-2 text-xs font-semibold">
-                                        {t('Your answer', 'আপনার উত্তর')}
+                                        {isCorrect
+                                          ? t('Your answer · correct', 'আপনার উত্তর · সঠিক')
+                                          : t('Your answer · incorrect', 'আপনার উত্তর · ভুল')}
                                       </span>
                                     )}
                                   </div>
