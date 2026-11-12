@@ -1,0 +1,657 @@
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  RotateCcw,
+  XCircle,
+} from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
+import { useContent } from '@/context/ContentContext';
+import type { AssessmentQuestion } from '@/types/law';
+
+interface AssessmentPageProps {
+  final?: boolean;
+}
+
+interface AssessmentAttempt {
+  id: string;
+  lawSlug: string;
+  timestamp: string;
+  score: number;
+  percentage: number;
+  passed: boolean;
+  answers: number[];
+}
+
+function getHistoryKey(slug: string) {
+  return `powerlab:assessment-attempts:v1:${encodeURIComponent(slug)}`;
+}
+
+function readAttempts(slug?: string): AssessmentAttempt[] {
+  if (!slug || typeof window === 'undefined') return [];
+
+  try {
+    const raw = window.localStorage.getItem(getHistoryKey(slug));
+    if (!raw) return [];
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter(
+      (item): item is AssessmentAttempt =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof item.id === 'string' &&
+        typeof item.timestamp === 'string' &&
+        typeof item.percentage === 'number' &&
+        typeof item.passed === 'boolean' &&
+        Array.isArray(item.answers)
+    );
+  } catch {
+    return [];
+  }
+}
+
+export default function AssessmentPage({ final = false }: AssessmentPageProps) {
+  const { lawSlug } = useParams<{ lawSlug: string }>();
+  const { t, language } = useLanguage();
+  const { laws } = useContent();
+
+  const law = final
+    ? undefined
+    : laws.find(
+        (item) =>
+          item.slug === lawSlug && item.isPublished !== false
+      );
+
+  const assessment = law?.assessment;
+  const questions: AssessmentQuestion[] = assessment?.questions ?? [];
+  const isAssessmentPublished =
+    !final &&
+    law?.isPublished !== false &&
+    assessment?.isPublished === true &&
+    questions.length > 0;
+
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState<number[]>(() =>
+    Array(questions.length).fill(-1)
+  );
+  const [result, setResult] = useState<AssessmentAttempt | null>(null);
+  const [history, setHistory] = useState<AssessmentAttempt[]>(() =>
+    readAttempts(lawSlug)
+  );
+
+  useEffect(() => {
+    setCurrentQuestion(0);
+    setAnswers(Array(questions.length).fill(-1));
+    setResult(null);
+    setHistory(readAttempts(lawSlug));
+  }, [lawSlug, final, questions.length]);
+
+  const question = questions[currentQuestion];
+  const selectedCount = answers.filter((answer) => answer !== -1).length;
+  const allAnswered =
+    questions.length > 0 && selectedCount === questions.length;
+
+  const handleAnswer = (optionIndex: number) => {
+    if (result) return;
+
+    setAnswers((previous) =>
+      previous.map((answer, index) =>
+        index === currentQuestion ? optionIndex : answer
+      )
+    );
+  };
+
+  const handleSubmit = () => {
+    if (!isAssessmentPublished || !allAnswered || result || !law) return;
+
+    const score = questions.reduce(
+      (total, item, index) =>
+        total + (answers[index] === item.correctOption ? 1 : 0),
+      0
+    );
+
+    const percentage = Math.round((score / questions.length) * 100);
+    const passPercentage = assessment?.passPercentage ?? 60;
+
+    const attempt: AssessmentAttempt = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      lawSlug: law.slug,
+      timestamp: new Date().toISOString(),
+      score,
+      percentage,
+      passed: percentage >= passPercentage,
+      answers: [...answers],
+    };
+
+    setResult(attempt);
+
+    const updatedHistory = [attempt, ...history].slice(0, 20);
+    setHistory(updatedHistory);
+
+    try {
+      window.localStorage.setItem(
+        getHistoryKey(law.slug),
+        JSON.stringify(updatedHistory)
+      );
+    } catch {
+      // The current result remains available even if browser storage is unavailable.
+    }
+  };
+
+  const handleRetry = () => {
+    setCurrentQuestion(0);
+    setAnswers(Array(questions.length).fill(-1));
+    setResult(null);
+  };
+
+  if (!final && !law) {
+    return (
+      <section className="container-content flex min-h-[60vh] items-center justify-center py-20">
+        <div className="max-w-lg text-center">
+          <span className="font-display text-6xl text-forest-600">404</span>
+          <h1 className="mt-4 font-display text-2xl text-ink">
+            {t('Assessment not found', 'মূল্যায়ন পাওয়া যায়নি')}
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-ink-muted">
+            {t(
+              'We could not find a published law associated with this assessment address.',
+              'এই মূল্যায়নের ঠিকানার সঙ্গে সম্পর্কিত কোনো প্রকাশিত নিয়ম খুঁজে পাওয়া যায়নি।'
+            )}
+          </p>
+          <Link to="/laws" className="btn-primary mt-7">
+            <ArrowLeft className="h-4 w-4" />
+            {t('Explore all laws', 'সব নিয়ম দেখুন')}
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  const title = final
+    ? t('The 48 Laws — Final Assessment', '৪৮টি নিয়ম — চূড়ান্ত মূল্যায়ন')
+    : language === 'en'
+      ? law!.titleEn
+      : law!.titleBn;
+
+  const description = final
+    ? t(
+        'A comprehensive assessment covering the principles and ideas across all 48 laws.',
+        '৪৮টি নিয়মের নীতি ও ধারণাগুলোর ওপর একটি সমন্বিত মূল্যায়ন।'
+      )
+    : language === 'en'
+      ? law!.shortEn
+      : law!.shortBn;
+
+  const passPercentage = assessment?.passPercentage ?? 60;
+  const bestPercentage =
+    history.length > 0
+      ? Math.max(...history.map((attempt) => attempt.percentage))
+      : null;
+
+  return (
+    <section className={language === 'bn' ? 'font-bengali' : ''}>
+      <div className="border-b border-line bg-canvas-2/60">
+        <div className="container-content py-10 md:py-14">
+          <Link
+            to={final ? '/laws' : `/laws/${law!.slug}`}
+            className="inline-flex items-center gap-2 text-sm text-ink-muted transition-colors hover:text-forest-600"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t('Back to reading', 'পড়ার পাতায় ফিরে যান')}
+          </Link>
+
+          <div className="mt-8 flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-sm bg-forest-500/10 text-forest-600">
+              <ClipboardList className="h-5 w-5" />
+            </span>
+            <span className="eyebrow text-bronze-500">
+              {final
+                ? t('COMPREHENSIVE ASSESSMENT', 'সমন্বিত মূল্যায়ন')
+                : t('LESSON ASSESSMENT', 'পাঠের মূল্যায়ন')}
+            </span>
+          </div>
+
+          <h1 className="mt-5 max-w-3xl font-display text-3xl leading-tight tracking-tightish text-ink md:text-5xl">
+            {title}
+          </h1>
+
+          <p className="mt-5 max-w-2xl text-base leading-[1.85] text-ink-muted">
+            {description}
+          </p>
+
+          {!final && law && (
+            <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-bronze-500">
+              {t(
+                `LAW ${String(law.number).padStart(2, '0')}`,
+                `নিয়ম ${String(law.number).padStart(2, '0')}`
+              )}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="container-content py-14 md:py-20">
+        <div className="mx-auto max-w-3xl">
+          {!isAssessmentPublished ? (
+            <div className="surface-card p-7 text-center sm:p-10">
+              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-forest-500/10 text-forest-600">
+                <FileText className="h-6 w-6" />
+              </span>
+
+              <span className="eyebrow mt-7 block text-bronze-500">
+                {t('ASSESSMENT CONTENT', 'মূল্যায়নের বিষয়বস্তু')}
+              </span>
+
+              <h2 className="mt-4 font-display text-2xl text-ink md:text-3xl">
+                {final
+                  ? t(
+                      'Final assessment coming soon',
+                      'চূড়ান্ত মূল্যায়ন শীঘ্রই আসছে'
+                    )
+                  : t(
+                      'Assessment not available yet',
+                      'মূল্যায়ন এখনো উপলব্ধ নয়'
+                    )}
+              </h2>
+
+              <p className="mx-auto mt-5 max-w-lg text-sm leading-[1.9] text-ink-muted">
+                {final
+                  ? t(
+                      'The final assessment question bank has not been published yet. It will become available after its questions, answers, and explanations have been created.',
+                      'চূড়ান্ত মূল্যায়নের প্রশ্নভান্ডার এখনো প্রকাশ করা হয়নি। প্রশ্ন, উত্তর এবং ব্যাখ্যা তৈরি ও প্রকাশিত হলে এটি উপলব্ধ হবে।'
+                    )
+                  : t(
+                      'This assessment has not been published by the administrator yet. Please return after its questions and explanations become available.',
+                      'প্রশাসক এখনো এই মূল্যায়ন প্রকাশ করেননি। প্রশ্ন ও ব্যাখ্যা উপলব্ধ হলে আবার ফিরে আসুন।'
+                    )}
+              </p>
+
+              <div className="my-8 rule-line" />
+
+              {!final && (
+                <div className="grid gap-4 text-left sm:grid-cols-2">
+                  <div className="rounded-sm bg-canvas p-4">
+                    <span className="text-xs text-ink-muted">
+                      {t('Assessment format', 'মূল্যায়নের ধরন')}
+                    </span>
+                    <p className="mt-1 text-sm font-semibold text-ink">
+                      {t(
+                        'Multiple-choice questions',
+                        'বহুনির্বাচনী প্রশ্ন'
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="rounded-sm bg-canvas p-4">
+                    <span className="text-xs text-ink-muted">
+                      {t('Passing score', 'পাস নম্বর')}
+                    </span>
+                    <p className="mt-1 text-sm font-semibold text-ink">
+                      {passPercentage}%
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                <Link to="/laws" className="btn-primary">
+                  <BookOpen className="h-4 w-4" />
+                  {t('Continue reading', 'পড়া চালিয়ে যান')}
+                </Link>
+
+                {!final && law && (
+                  <Link to={`/laws/${law.slug}`} className="btn-secondary">
+                    {t('Return to this lesson', 'এই পাঠে ফিরে যান')}
+                  </Link>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              {!result ? (
+                <div className="surface-card p-6 sm:p-9">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <span className="eyebrow text-bronze-500">
+                        {t('YOUR ASSESSMENT', 'আপনার মূল্যায়ন')}
+                      </span>
+                      <h2 className="mt-2 font-display text-xl text-ink">
+                        {t('Test your understanding', 'আপনার বোঝাপড়া যাচাই করুন')}
+                      </h2>
+                    </div>
+
+                    <span className="rounded-sm bg-canvas px-3 py-2 text-sm font-semibold text-ink">
+                      {t('Pass mark', 'পাস নম্বর')}: {passPercentage}%
+                    </span>
+                  </div>
+
+                  <div className="mt-7">
+                    <div className="mb-2 flex items-center justify-between text-xs text-ink-muted">
+                      <span>
+                        {t('Question progress', 'প্রশ্নের অগ্রগতি')}
+                      </span>
+                      <span>
+                        {selectedCount}/{questions.length}{' '}
+                        {t('answered', 'উত্তর দেওয়া হয়েছে')}
+                      </span>
+                    </div>
+                    <div
+                      className="h-2 overflow-hidden rounded-full bg-canvas"
+                      role="progressbar"
+                      aria-valuenow={selectedCount}
+                      aria-valuemin={0}
+                      aria-valuemax={questions.length}
+                      aria-label={t('Answered questions', 'উত্তর দেওয়া প্রশ্ন')}
+                    >
+                      <div
+                        className="h-full rounded-full bg-forest-500 transition-all"
+                        style={{
+                          width: `${(selectedCount / questions.length) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-bronze-500">
+                      {t('QUESTION', 'প্রশ্ন')} {currentQuestion + 1}{' '}
+                      {t('OF', 'এর মধ্যে')} {questions.length}
+                    </span>
+                    <span className="text-xs text-ink-muted">
+                      {t('Choose one answer', 'একটি উত্তর নির্বাচন করুন')}
+                    </span>
+                  </div>
+
+                  <h3 className="mt-4 font-display text-xl leading-relaxed text-ink sm:text-2xl">
+                    {language === 'en'
+                      ? question.questionEn
+                      : question.questionBn}
+                  </h3>
+
+                  <div className="mt-7 grid gap-3">
+                    {(language === 'en'
+                      ? question.optionsEn
+                      : question.optionsBn
+                    ).map((option, optionIndex) => {
+                      const isSelected =
+                        answers[currentQuestion] === optionIndex;
+
+                      return (
+                        <button
+                          key={`${question.id}-${optionIndex}`}
+                          type="button"
+                          onClick={() => handleAnswer(optionIndex)}
+                          aria-pressed={isSelected}
+                          className={`flex w-full items-start gap-4 border p-4 text-left transition-colors ${
+                            isSelected
+                              ? 'border-forest-500 bg-forest-500/10 text-forest-800'
+                              : 'border-line bg-surface text-ink hover:border-forest-300 hover:bg-canvas'
+                          }`}
+                        >
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
+                              isSelected
+                                ? 'border-forest-500 bg-forest-500 text-white'
+                                : 'border-line bg-canvas text-ink-muted'
+                            }`}
+                          >
+                            {String.fromCharCode(65 + optionIndex)}
+                          </span>
+                          <span className="pt-1 text-sm leading-relaxed">
+                            {option}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCurrentQuestion((previous) =>
+                          Math.max(0, previous - 1)
+                        )
+                      }
+                      disabled={currentQuestion === 0}
+                      className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      {t('Previous', 'আগের প্রশ্ন')}
+                    </button>
+
+                    {currentQuestion < questions.length - 1 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentQuestion((previous) =>
+                            Math.min(questions.length - 1, previous + 1)
+                          )
+                        }
+                        className="btn-primary"
+                      >
+                        {t('Next question', 'পরবর্তী প্রশ্ন')}
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={!allAnswered}
+                        className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {t('Submit assessment', 'মূল্যায়ন জমা দিন')}
+                        <CheckCircle2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {!allAnswered && currentQuestion === questions.length - 1 && (
+                    <p className="mt-4 text-right text-xs text-ink-muted">
+                      {t(
+                        `Answer all ${questions.length} questions before submitting.`,
+                        `জমা দেওয়ার আগে সব ${questions.length}টি প্রশ্নের উত্তর দিন।`
+                      )}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-7">
+                  <div className="surface-card p-7 text-center sm:p-10">
+                    <span
+                      className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${
+                        result.passed
+                          ? 'bg-forest-500/10 text-forest-600'
+                          : 'bg-red-500/10 text-red-600'
+                      }`}
+                    >
+                      {result.passed ? (
+                        <CheckCircle2 className="h-8 w-8" />
+                      ) : (
+                        <XCircle className="h-8 w-8" />
+                      )}
+                    </span>
+
+                    <span className="eyebrow mt-6 block text-bronze-500">
+                      {t('ASSESSMENT RESULT', 'মূল্যায়নের ফলাফল')}
+                    </span>
+
+                    <h2 className="mt-3 font-display text-3xl text-ink">
+                      {result.passed
+                        ? t('Congratulations! You passed.', 'অভিনন্দন! আপনি পাস করেছেন।')
+                        : t('Keep learning and try again.', 'শেখা চালিয়ে যান এবং আবার চেষ্টা করুন।')}
+                    </h2>
+
+                    <div className="mt-7">
+                      <span className="font-display text-6xl text-ink">
+                        {result.percentage}%
+                      </span>
+                      <p className="mt-2 text-sm text-ink-muted">
+                        {t('Your score', 'আপনার প্রাপ্ত নম্বর')}
+                      </p>
+                    </div>
+
+                    <div className="mx-auto mt-7 grid max-w-md grid-cols-2 gap-3 text-left">
+                      <div className="rounded-sm bg-canvas p-4">
+                        <span className="text-xs text-ink-muted">
+                          {t('Correct answers', 'সঠিক উত্তর')}
+                        </span>
+                        <p className="mt-1 text-xl font-semibold text-forest-700">
+                          {result.score}/{questions.length}
+                        </p>
+                      </div>
+                      <div className="rounded-sm bg-canvas p-4">
+                        <span className="text-xs text-ink-muted">
+                          {t('Passing score', 'পাস নম্বর')}
+                        </span>
+                        <p className="mt-1 text-xl font-semibold text-ink">
+                          {passPercentage}%
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-8 flex flex-wrap justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleRetry}
+                        className="btn-primary"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        {t('Try again', 'আবার চেষ্টা করুন')}
+                      </button>
+                      <Link
+                        to={`/laws/${law!.slug}`}
+                        className="btn-secondary"
+                      >
+                        <BookOpen className="h-4 w-4" />
+                        {t('Back to lesson', 'পাঠে ফিরে যান')}
+                      </Link>
+                    </div>
+                  </div>
+
+                  <section className="surface-card p-6 sm:p-8">
+                    <span className="eyebrow text-bronze-500">
+                      {t('ANSWER REVIEW', 'উত্তর পর্যালোচনা')}
+                    </span>
+                    <h3 className="mt-2 font-display text-2xl text-ink">
+                      {t('Review your answers', 'আপনার উত্তরগুলো পর্যালোচনা করুন')}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+                      {t(
+                        'Compare your choices with the correct answers and read each explanation.',
+                        'সঠিক উত্তরের সঙ্গে আপনার নির্বাচন তুলনা করুন এবং প্রতিটি ব্যাখ্যা পড়ুন।'
+                      )}
+                    </p>
+
+                    <div className="mt-7 space-y-7">
+                      {questions.map((item, index) => {
+                        const selectedAnswer = result.answers[index];
+                        const isCorrect =
+                          selectedAnswer === item.correctOption;
+                        const options =
+                          language === 'en'
+                            ? item.optionsEn
+                            : item.optionsBn;
+
+                        return (
+                          <article
+                            key={item.id}
+                            className="border-t border-line pt-6 first:border-0 first:pt-0"
+                          >
+                            <div className="flex items-start gap-3">
+                              {isCorrect ? (
+                                <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-forest-600" />
+                              ) : (
+                                <XCircle className="mt-1 h-5 w-5 shrink-0 text-red-600" />
+                              )}
+                              <div className="min-w-0">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-bronze-500">
+                                  {t('QUESTION', 'প্রশ্ন')} {index + 1}
+                                </span>
+                                <h4 className="mt-2 font-semibold leading-relaxed text-ink">
+                                  {language === 'en'
+                                    ? item.questionEn
+                                    : item.questionBn}
+                                </h4>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 space-y-2 pl-8">
+                              {options.map((option, optionIndex) => {
+                                const isCorrectOption =
+                                  optionIndex === item.correctOption;
+                                const isChosen =
+                                  optionIndex === selectedAnswer;
+
+                                return (
+                                  <div
+                                    key={optionIndex}
+                                    className={`border px-3 py-3 text-sm ${
+                                      isCorrectOption
+                                        ? 'border-forest-300 bg-forest-500/10 text-forest-800'
+                                        : isChosen
+                                          ? 'border-red-300 bg-red-500/10 text-red-800'
+                                          : 'border-line text-ink-muted'
+                                    }`}
+                                  >
+                                    <span className="mr-2 font-semibold">
+                                      {String.fromCharCode(65 + optionIndex)}.
+                                    </span>
+                                    {option}
+                                    {isCorrectOption && (
+                                      <span className="ml-2 text-xs font-semibold">
+                                        {t('Correct answer', 'সঠিক উত্তর')}
+                                      </span>
+                                    )}
+                                    {isChosen && !isCorrectOption && (
+                                      <span className="ml-2 text-xs font-semibold">
+                                        {t('Your answer', 'আপনার উত্তর')}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="ml-8 mt-4 rounded-sm bg-canvas p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-bronze-500">
+                                {t('EXPLANATION', 'ব্যাখ্যা')}
+                              </p>
+                              <p className="mt-2 text-sm leading-relaxed text-ink">
+                                {language === 'en'
+                                  ? item.explanationEn
+                                  : item.explanationBn}
+                              </p>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-ink-muted">
+                <span>
+                  {t('Previous attempts', 'পূর্ববর্তী প্রচেষ্টা')}: {history.length}
+                </span>
+                {bestPercentage !== null && (
+                  <span>
+                    {t('Best score', 'সর্বোচ্চ নম্বর')}: {bestPercentage}%
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}

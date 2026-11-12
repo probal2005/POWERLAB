@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-feature-settings: 'kern', 'liga', 'calt';
+  }
+
+  ::selection {
+    @apply bg-forest-100 text-forest-700;
+  }
+
+  /* Visible focus states */
+  :focus-visible {
+    outline: 2px solid #243d35;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Reading typography */
+  .reading-body p {
+    @apply text-ink/90 leading-[1.75] mb-5 text-[1.0625rem];
+  }
+  .reading-body p:last-child {
+    @apply mb-0;
+  }
+  .reading-body h2 {
+    @apply font-display text-2xl md:text-[1.75rem] leading-[1.25] text-ink mt-12 mb-4 tracking-tightish;
+  }
+  .reading-body h3 {
+    @apply font-display text-xl md:text-[1.3rem] leading-[1.3] text-ink mt-8 mb-3;
+  }
+  .reading-body ul {
+    @apply space-y-2.5 mb-5 pl-5;
+    list-style-type: disc;
+  }
+  .reading-body li {
+    @apply text-ink/90 leading-[1.7] text-[1.0625rem] pl-1;
+  }
+  .reading-body ul li::marker {
+    @apply text-bronze-400;
+  }
+  .reading-body strong {
+    @apply font-semibold text-ink;
+  }
+  .reading-body em {
+    @apply font-display italic text-ink/90;
+  }
+  .reading-body blockquote {
+    @apply border-l-2 border-bronze-300 pl-5 my-6 font-display italic text-ink/85 text-lg leading-[1.6];
+  }
+
+  .bengali-body p,
+  .bengali-body li {
+    font-family: 'Noto Sans Bengali', Inter, sans-serif;
+    line-height: 1.9;
+  }
+  .bengali-body h2,
+  .bengali-body h3 {
+    font-family: 'Noto Sans Bengali', Inter, sans-serif;
+  }
+
+  /* Headline kerning */
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  .container-content {
+    @apply mx-auto w-full max-w-content px-5 sm:px-8 lg:px-10;
+  }
+
+  .container-reading {
+    @apply mx-auto w-full max-w-reading px-5 sm:px-8;
+  }
+
+  .eyebrow {
+    @apply font-sans text-[0.7rem] uppercase tracking-wider2 text-ink-muted font-semibold;
+  }
+
+  .rule-line {
+    @apply h-px w-full bg-line;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-forest-500 px-6 py-3 text-sm font-semibold text-surface transition-all duration-300 ease-outsoft hover:bg-forest-600 active:bg-forest-700 disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-line bg-surface px-6 py-3 text-sm font-semibold text-ink transition-all duration-300 ease-outsoft hover:border-forest-300 hover:text-forest-600 disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-canvas-2 hover:text-ink;
+  }
+
+  .surface-card {
+    @apply bg-surface border border-line rounded-sm;
+  }
+
+  .nav-link {
+    @apply relative text-sm font-medium text-ink/80 transition-colors duration-200 hover:text-forest-600;
+  }
+  .nav-link-active {
+    @apply text-forest-600;
+  }
+}
+
+/* Custom thin scrollbar */
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #ded9ce;
+  border-radius: 9999px;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a47d50;
+}
+
+/* Reading fade-in on mount */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: fadeUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
