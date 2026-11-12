@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Construction, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, Construction, Plus, Save, Trash2 } from 'lucide-react';
 import { useContent } from '@/context/ContentContext';
 
 const sections: Record<
@@ -45,6 +45,7 @@ export default function AdminSectionPage() {
   const section = sections[key];
 
   if (key === 'categories') return <CategoryManager />;
+  if (key === 'assessments') return <AssessmentManager />;
 
   if (!section) {
     return (
@@ -153,4 +154,43 @@ function CategoryManager() {
       {(message || error) && <p role="status" className="text-sm text-red-700">{message || error}</p>}
     </div>
   );
+}
+
+function AssessmentManager() {
+  const { laws, loading, error } = useContent();
+  const ordered = [...laws].sort((a, b) => a.number - b.number);
+  const published = ordered.filter((law) => law.isPublished !== false);
+  const ready = published.filter((law) => law.assessment?.isPublished && (law.assessment.questions?.length ?? 0) > 0);
+
+  return (
+    <div className="animate-fade-up space-y-7">
+      <div className="border-b border-line pb-8">
+        <p className="eyebrow text-bronze-600">Administration</p>
+        <h1 className="mt-3 font-display text-3xl tracking-tight text-ink sm:text-4xl">Assessments</h1>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">Review each law assessment, edit its bilingual questions and explanations, and publish it when the question bank is complete.</p>
+      </div>
+      {error && <p role="alert" className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
+      {loading ? <p className="text-sm text-ink-muted">Loading assessments…</p> : <>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Metric label="Published laws" value={published.length} />
+          <Metric label="Published assessments" value={ready.length} />
+          <Metric label="Needs assessment" value={published.length - ready.length} />
+        </div>
+        <div className="divide-y divide-line border border-line bg-surface">
+          {ordered.map((law) => {
+            const questionCount = law.assessment?.questions?.length ?? 0;
+            const isReady = law.isPublished !== false && law.assessment?.isPublished === true && questionCount > 0;
+            return <div key={law.slug} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-sm font-semibold text-ink">Law {String(law.number).padStart(2, '0')}: {law.titleEn}</p><p className="mt-1 text-xs text-ink-muted">{questionCount} question{questionCount === 1 ? '' : 's'} · {isReady ? 'Published' : law.isPublished === false ? 'Law unpublished' : 'Draft / not published'}</p></div>
+              <Link className="btn-secondary w-fit" to={`/admin/laws?assessment=${encodeURIComponent(law.slug)}`}><ClipboardCheck size={15} /> Edit question bank</Link>
+            </div>;
+          })}
+        </div>
+      </>}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return <div className="border border-line bg-surface p-5"><p className="font-display text-3xl text-ink">{value}</p><p className="mt-1 text-xs text-ink-muted">{label}</p></div>;
 }

@@ -48,6 +48,7 @@ export default function LessonPage() {
   const [readWidth, setReadWidth] = useState<ReadWidth>('normal');
   const [bookmarked, setBookmarked] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [learningNotice, setLearningNotice] = useState('');
   const [tocOpen, setTocOpen] = useState(false);
 
   const sectionRefs = useRef<Record<number, HTMLElement | null>>({});
@@ -84,47 +85,49 @@ export default function LessonPage() {
     }
   }, [slug, user]);
 
-  const persistBookmark = (next: boolean) => {
-    if (!slug) return;
+  const persistBookmark = async (next: boolean): Promise<boolean> => {
+    if (!slug) return false;
     if (user) {
       const request = next
         ? supabase.from('student_bookmarks').insert({ user_id: user.id, law_slug: slug })
         : supabase.from('student_bookmarks').delete().eq('user_id', user.id).eq('law_slug', slug);
-      void request.then(({ error }) => {
-        if (error) console.error('Bookmark could not be saved:', error.message);
-      });
-      return;
+      const { error } = await request;
+      if (error) { setLearningNotice('Your bookmark could not be saved. Please try again.'); return false; }
+      return true;
     }
     try {
       const bm: string[] = JSON.parse(localStorage.getItem('powerlab:bookmarks') || '[]');
       const updated = next ? [...new Set([...bm, slug])] : bm.filter((s) => s !== slug);
       localStorage.setItem('powerlab:bookmarks', JSON.stringify(updated));
-    } catch { /* ignore */ }
+      return true;
+    } catch { setLearningNotice('Your bookmark could not be saved on this device.'); return false; }
   };
 
-  const persistCompleted = (next: boolean) => {
-    if (!slug) return;
+  const persistCompleted = async (next: boolean): Promise<boolean> => {
+    if (!slug) return false;
     if (user) {
-      void supabase.from('student_law_progress').upsert({
+      const { error } = await supabase.from('student_law_progress').upsert({
         user_id: user.id, law_slug: slug, status: next ? 'completed' : 'in_progress',
         completed_at: next ? new Date().toISOString() : null, last_viewed_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,law_slug' }).then(({ error }) => {
-        if (error) console.error('Learning progress could not be saved:', error.message);
-      });
-      return;
+      }, { onConflict: 'user_id,law_slug' });
+      if (error) { setLearningNotice('Your lesson progress could not be saved. Please try again.'); return false; }
+      return true;
     }
     try {
       const cmp: string[] = JSON.parse(localStorage.getItem('powerlab:completed') || '[]');
       const updated = next ? [...new Set([...cmp, slug])] : cmp.filter((s) => s !== slug);
       localStorage.setItem('powerlab:completed', JSON.stringify(updated));
-    } catch { /* ignore */ }
+      return true;
+    } catch { setLearningNotice('Your lesson progress could not be saved on this device.'); return false; }
   };
 
   useEffect(() => {
     if (!slug || !user) return;
     void supabase.from('student_law_progress').upsert({
       user_id: user.id, law_slug: slug, last_viewed_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,law_slug', ignoreDuplicates: true });
+    }, { onConflict: 'user_id,law_slug' }).then(({ error }) => {
+      if (error) setLearningNotice('Your recent lesson activity could not be saved.');
+    });
   }, [slug, user]);
 
   // Scroll-spy for active TOC highlight
@@ -174,13 +177,13 @@ export default function LessonPage() {
 
   const toggleBookmark = () => {
     const next = !bookmarked;
-    setBookmarked(next);
-    persistBookmark(next);
+    setLearningNotice('');
+    void persistBookmark(next).then((saved) => { if (saved) setBookmarked(next); });
   };
   const toggleCompleted = () => {
     const next = !completed;
-    setCompleted(next);
-    persistCompleted(next);
+    setLearningNotice('');
+    void persistCompleted(next).then((saved) => { if (saved) setCompleted(next); });
   };
 
   const scrollToSection = (i: number) => {
@@ -303,6 +306,7 @@ export default function LessonPage() {
           </div>
         </div>
       </div>
+      {learningNotice && <div role="status" className="container-content pt-4 text-sm text-red-700">{learningNotice}</div>}
 
       {/* Body: TOC + content */}
       <div className="container-content py-10 md:py-14">

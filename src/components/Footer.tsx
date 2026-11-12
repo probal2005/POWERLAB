@@ -35,7 +35,7 @@ export default function Footer() {
             <ul className="space-y-3 text-sm">
               <li><Link to="/login" className="text-ink/80 hover:text-forest-600 transition-colors">{t('Sign In', 'প্রবেশ')}</Link></li>
               <li><Link to="/register" className="text-ink/80 hover:text-forest-600 transition-colors">{t('Register', 'নিবন্ধন')}</Link></li>
-              <li><Link to="/dashboard" className="text-ink/80 hover:text-forest-600 transition-colors">{t('Dashboard', 'ড্যাশবোর্ড')}</Link></li>
+              <li><Link to="/student" className="text-ink/80 hover:text-forest-600 transition-colors">{t('Dashboard', 'ড্যাশবোর্ড')}</Link></li>
             </ul>
           </div>
 

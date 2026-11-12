@@ -29,6 +29,7 @@ interface AssessmentAttempt {
   passed: boolean;
   answers: number[];
   reviewCorrect?: boolean[];
+  review?: { correct: boolean; correctOption: number; explanationEn: string; explanationBn: string }[];
 }
 
 export default function AssessmentPage({ final = false }: AssessmentPageProps) {
@@ -113,6 +114,10 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
       return;
     }
     const saved = data as Omit<AssessmentAttempt, 'lawSlug'>;
+    if (!saved.review && saved.reviewCorrect) {
+      saved.review = saved.reviewCorrect.map((correct) => ({ correct, correctOption: -1, explanationEn: '', explanationBn: '' }));
+    }
+    saved.reviewCorrect = saved.review?.map((item) => item.correct) ?? saved.reviewCorrect;
     const attempt: AssessmentAttempt = { ...saved, lawSlug: law.slug };
     setResult(attempt);
     setHistory((previous) => [attempt, ...previous].slice(0, 20));
@@ -526,7 +531,8 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                     <div className="mt-7 space-y-7">
                       {questions.map((item, index) => {
                         const selectedAnswer = result.answers[index];
-                        const isCorrect = result.reviewCorrect?.[index] ?? false;
+                        const review = result.review?.[index];
+                        const isCorrect = review?.correct ?? result.reviewCorrect?.[index] ?? false;
                         const options =
                           language === 'en'
                             ? item.optionsEn
@@ -560,13 +566,14 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                 const isChosen =
                                   optionIndex === selectedAnswer;
 
+                                const isCorrectOption = optionIndex === review?.correctOption;
                                 return (
                                   <div
                                     key={optionIndex}
                                     className={`border px-3 py-3 text-sm ${
-                                      isChosen && isCorrect
+                                      isCorrectOption
                                         ? 'border-forest-300 bg-forest-500/10 text-forest-800'
-                                        : isChosen
+                                        : isChosen && !isCorrectOption
                                           ? 'border-red-300 bg-red-500/10 text-red-800'
                                           : 'border-line text-ink-muted'
                                     }`}
@@ -582,6 +589,11 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                           : t('Your answer · incorrect', 'আপনার উত্তর · ভুল')}
                                       </span>
                                     )}
+                                    {isCorrectOption && !isChosen && (
+                                      <span className="ml-2 text-xs font-semibold">
+                                        {t('Correct answer', 'সঠিক উত্তর')}
+                                      </span>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -592,9 +604,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                 {t('EXPLANATION', 'ব্যাখ্যা')}
                               </p>
                               <p className="mt-2 text-sm leading-relaxed text-ink">
-                                {language === 'en'
-                                  ? item.explanationEn
-                                  : item.explanationBn}
+                                {language === 'en' ? review?.explanationEn : review?.explanationBn}
                               </p>
                             </div>
                           </article>

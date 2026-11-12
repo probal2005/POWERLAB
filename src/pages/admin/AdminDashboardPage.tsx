@@ -6,7 +6,6 @@ import {
   FileEdit,
   Layers3,
   Plus,
-  ShieldAlert,
 } from 'lucide-react';
 import { useContent } from '@/context/ContentContext';
 
@@ -213,25 +212,11 @@ export default function AdminDashboardPage() {
         </div>
       </section>
 
-      <section className="border border-bronze-200 bg-bronze-50/60 p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <ShieldAlert
-            size={21}
-            className="mt-0.5 shrink-0 text-bronze-700"
-          />
-          <div>
-            <h2 className="text-sm font-semibold text-ink">
-              Local prototype — administrator access is not secured
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-              Content is currently saved in this browser's local storage.
-              Anyone who can open this website can access the admin routes.
-              Do not store sensitive information or treat this as a production
-              administrator panel until server-side authentication and
-              authorization are implemented.
-            </p>
-          </div>
-        </div>
+      <section className="border border-line bg-surface p-5 sm:p-6">
+        <h2 className="text-sm font-semibold text-ink">Publishing checklist</h2>
+        <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+          Review both language versions before publishing. Laws without lesson sections remain visible in the library, but the lesson page will ask students to return later. Add reviewed source material before publishing complete lesson content.
+        </p>
       </section>
     </div>
   );
