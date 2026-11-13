@@ -8,8 +8,8 @@ export default function Footer() {
   return (
     <footer className="mt-12 border-t border-line bg-canvas-2/60">
       <div className="container-content py-9 sm:py-10">
-        <div className="grid grid-cols-1 gap-7 sm:grid-cols-2 sm:gap-x-8 md:grid-cols-12 md:gap-6">
-          <div className="md:col-span-5">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-12 md:gap-6">
+          <div className="col-span-2 md:col-span-5">
             <Link to="/" className="inline-flex items-center" aria-label="POWERLAB home">
               <BrandLogo variant="footer" />
             </Link>
@@ -39,7 +39,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          <div className="md:col-span-3">
+          <div className="col-span-2 md:col-span-3">
             <h3 className="eyebrow mb-3">{t('Independence Notice', 'স্বাধীনতা বিজ্ঞপ্তি')}</h3>
             <p className="text-xs leading-relaxed text-ink-muted">
               {t(
