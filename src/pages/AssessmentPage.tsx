@@ -29,11 +29,12 @@ interface AssessmentAttempt {
   passed: boolean;
   answers: number[];
   reviewCorrect?: boolean[];
+  review?: { correct: boolean; correctOption: number; explanationEn: string; explanationBn: string }[];
 }
 
 export default function AssessmentPage({ final = false }: AssessmentPageProps) {
   const { lawSlug } = useParams<{ lawSlug: string }>();
-  const { t, language } = useLanguage();
+  const { t, tx, language } = useLanguage();
   const { laws } = useContent();
   const { user } = useAuth();
 
@@ -43,6 +44,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
         (item) =>
           item.slug === lawSlug && item.isPublished !== false
       );
+  const assessmentTranslationPrefix = final ? 'final' : `law:${lawSlug}`;
 
   const assessment = law?.assessment;
   const questions: AssessmentQuestion[] = assessment?.questions ?? [];
@@ -113,6 +115,10 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
       return;
     }
     const saved = data as Omit<AssessmentAttempt, 'lawSlug'>;
+    if (!saved.review && saved.reviewCorrect) {
+      saved.review = saved.reviewCorrect.map((correct) => ({ correct, correctOption: -1, explanationEn: '', explanationBn: '' }));
+    }
+    saved.reviewCorrect = saved.review?.map((item) => item.correct) ?? saved.reviewCorrect;
     const attempt: AssessmentAttempt = { ...saved, lawSlug: law.slug };
     setResult(attempt);
     setHistory((previous) => [attempt, ...previous].slice(0, 20));
@@ -138,9 +144,9 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
               'এই মূল্যায়নের ঠিকানার সঙ্গে সম্পর্কিত কোনো প্রকাশিত নিয়ম খুঁজে পাওয়া যায়নি।'
             )}
           </p>
-          <Link to="/laws" className="btn-primary mt-7">
+          <Link to="/assessments" className="btn-primary mt-7">
             <ArrowLeft className="h-4 w-4" />
-            {t('Explore all laws', 'সব নিয়ম দেখুন')}
+            {t('View assessments', 'মূল্যায়ন দেখুন')}
           </Link>
         </div>
       </section>
@@ -149,18 +155,14 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
 
   const title = final
     ? t('The 48 Laws — Final Assessment', '৪৮টি নিয়ম — চূড়ান্ত মূল্যায়ন')
-    : language === 'en'
-      ? law!.titleEn
-      : law!.titleBn;
+    : tx(`law:${law!.slug}:title`, law!.titleEn, law!.titleBn);
 
   const description = final
     ? t(
         'A comprehensive assessment covering the principles and ideas across all 48 laws.',
         '৪৮টি নিয়মের নীতি ও ধারণাগুলোর ওপর একটি সমন্বিত মূল্যায়ন।'
       )
-    : language === 'en'
-      ? law!.shortEn
-      : law!.shortBn;
+    : tx(`law:${law!.slug}:short`, law!.shortEn, law!.shortBn);
 
   const passPercentage = assessment?.passPercentage ?? 60;
   const bestPercentage =
@@ -274,9 +276,9 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
               )}
 
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                <Link to="/laws" className="btn-primary">
+                <Link to="/assessments" className="btn-primary">
                   <BookOpen className="h-4 w-4" />
-                  {t('Continue reading', 'পড়া চালিয়ে যান')}
+                  {t('View assessments', 'মূল্যায়ন দেখুন')}
                 </Link>
 
                 {!final && law && (
@@ -343,16 +345,14 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                   </div>
 
                   <h3 className="mt-4 font-display text-xl leading-relaxed text-ink sm:text-2xl">
-                    {language === 'en'
-                      ? question.questionEn
-                      : question.questionBn}
+                    {tx(`${assessmentTranslationPrefix}:assessment:${question.id}:question`, question.questionEn, question.questionBn)}
                   </h3>
 
                   <div className="mt-7 grid gap-3">
-                    {(language === 'en'
-                      ? question.optionsEn
-                      : question.optionsBn
-                    ).map((option, optionIndex) => {
+                    {(language === 'bn' ? question.optionsBn : question.optionsEn).map((option, optionIndex) => {
+                      const displayedOption = language === 'en' || language === 'bn'
+                        ? option
+                        : tx(`${assessmentTranslationPrefix}:assessment:${question.id}:option:${optionIndex}`, question.optionsEn[optionIndex], question.optionsBn[optionIndex]);
                       const isSelected =
                         answers[currentQuestion] === optionIndex;
 
@@ -378,7 +378,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                             {String.fromCharCode(65 + optionIndex)}
                           </span>
                           <span className="pt-1 text-sm leading-relaxed">
-                            {option}
+                          {displayedOption}
                           </span>
                         </button>
                       );
@@ -526,11 +526,9 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                     <div className="mt-7 space-y-7">
                       {questions.map((item, index) => {
                         const selectedAnswer = result.answers[index];
-                        const isCorrect = result.reviewCorrect?.[index] ?? false;
-                        const options =
-                          language === 'en'
-                            ? item.optionsEn
-                            : item.optionsBn;
+                        const review = result.review?.[index];
+                        const isCorrect = review?.correct ?? result.reviewCorrect?.[index] ?? false;
+                        const options = language === 'bn' ? item.optionsBn : item.optionsEn;
 
                         return (
                           <article
@@ -548,9 +546,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                   {t('QUESTION', 'প্রশ্ন')} {index + 1}
                                 </span>
                                 <h4 className="mt-2 font-semibold leading-relaxed text-ink">
-                                  {language === 'en'
-                                    ? item.questionEn
-                                    : item.questionBn}
+                                  {tx(`${assessmentTranslationPrefix}:assessment:${item.id}:question`, item.questionEn, item.questionBn)}
                                 </h4>
                               </div>
                             </div>
@@ -560,13 +556,14 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                 const isChosen =
                                   optionIndex === selectedAnswer;
 
+                                const isCorrectOption = optionIndex === review?.correctOption;
                                 return (
                                   <div
                                     key={optionIndex}
                                     className={`border px-3 py-3 text-sm ${
-                                      isChosen && isCorrect
+                                      isCorrectOption
                                         ? 'border-forest-300 bg-forest-500/10 text-forest-800'
-                                        : isChosen
+                                        : isChosen && !isCorrectOption
                                           ? 'border-red-300 bg-red-500/10 text-red-800'
                                           : 'border-line text-ink-muted'
                                     }`}
@@ -574,12 +571,17 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                     <span className="mr-2 font-semibold">
                                       {String.fromCharCode(65 + optionIndex)}.
                                     </span>
-                                    {option}
+                                    {language === 'en' || language === 'bn' ? option : tx(`${assessmentTranslationPrefix}:assessment:${item.id}:option:${optionIndex}`, item.optionsEn[optionIndex], item.optionsBn[optionIndex])}
                                     {isChosen && (
                                       <span className="ml-2 text-xs font-semibold">
                                         {isCorrect
                                           ? t('Your answer · correct', 'আপনার উত্তর · সঠিক')
                                           : t('Your answer · incorrect', 'আপনার উত্তর · ভুল')}
+                                      </span>
+                                    )}
+                                    {isCorrectOption && !isChosen && (
+                                      <span className="ml-2 text-xs font-semibold">
+                                        {t('Correct answer', 'সঠিক উত্তর')}
                                       </span>
                                     )}
                                   </div>
@@ -592,9 +594,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                                 {t('EXPLANATION', 'ব্যাখ্যা')}
                               </p>
                               <p className="mt-2 text-sm leading-relaxed text-ink">
-                                {language === 'en'
-                                  ? item.explanationEn
-                                  : item.explanationBn}
+                                {tx(`${assessmentTranslationPrefix}:assessment:${item.id}:explanation`, review?.explanationEn ?? item.explanationEn, review?.explanationBn ?? item.explanationBn)}
                               </p>
                             </div>
                           </article>

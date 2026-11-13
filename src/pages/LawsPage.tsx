@@ -7,8 +7,8 @@ import { useContent } from '@/context/ContentContext';
 type SortKey = 'number' | 'title';
 
 export default function LawsPage() {
-  const { t, language } = useLanguage();
-  const { laws, categories } = useContent();
+  const { t, tx, language } = useLanguage();
+  const { laws, categories, loading, error } = useContent();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [sort, setSort] = useState<SortKey>('number');
@@ -29,14 +29,14 @@ export default function LawsPage() {
     });
     list = [...list].sort((a, b) => {
       if (sort === 'title') {
-        const ta = language === 'en' ? a.titleEn : a.titleBn;
-        const tb = language === 'en' ? b.titleEn : b.titleBn;
+        const ta = tx(`law:${a.slug}:title`, a.titleEn, a.titleBn);
+        const tb = tx(`law:${b.slug}:title`, b.titleEn, b.titleBn);
         return ta.localeCompare(tb);
       }
       return a.number - b.number;
     });
     return list;
-  }, [laws, query, category, sort, language]);
+  }, [laws, query, category, sort, tx]);
 
   const activeCat = categories.find((c) => c.id === category);
 
@@ -103,7 +103,7 @@ export default function LawsPage() {
                   </FilterChip>
                   {categories.map((c) => (
                     <FilterChip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>
-                      {language === 'en' ? c.labelEn : c.labelBn}
+                      {tx(`category:${c.id}:label`, c.labelEn, c.labelBn)}
                     </FilterChip>
                   ))}
                 </div>
@@ -129,8 +129,8 @@ export default function LawsPage() {
         <div className="container-content py-10 md:py-12">
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm text-ink-muted">
-              {filtered.length} {t('of', 'এর মধ্যে')} 48 {t('laws', 'নিয়ম')}
-              {activeCat && ` · ${language === 'en' ? activeCat.labelEn : activeCat.labelBn}`}
+              {loading ? '—' : filtered.length} {t('of', 'এর মধ্যে')} 48 {t('laws', 'নিয়ম')}
+              {activeCat && ` · ${tx(`category:${activeCat.id}:label`, activeCat.labelEn, activeCat.labelBn)}`}
             </p>
             {(query || category !== 'all') && (
               <button
@@ -142,13 +142,26 @@ export default function LawsPage() {
             )}
           </div>
 
-          {filtered.length === 0 ? (
+          {loading ? (
+            <p role="status" className="border-t border-line py-16 text-center text-sm text-ink-muted">
+              {t('Loading the law directory…', 'নিয়মের তালিকা লোড হচ্ছে…')}
+            </p>
+          ) : error && laws.length === 0 ? (
+            <p role="alert" className="border-t border-line py-16 text-center text-sm text-error">
+              {t('The law directory could not be loaded. Please refresh the page and try again.', 'নিয়মের তালিকা লোড হয়নি। পৃষ্ঠাটি রিফ্রেশ করে আবার চেষ্টা করুন।')}
+            </p>
+          ) : filtered.length === 0 ? (
             <div className="py-24 text-center">
               <p className="font-display text-xl text-ink">{t('No laws match your search.', 'আপনার অনুসন্ধানে কোনো নিয়ম মেলে নি।')}</p>
               <p className="mt-2 text-sm text-ink-muted">{t('Try a different keyword or reset the filters.', 'ভিন্ন কীওয়ার্ড চেষ্টা করুন বা ফিল্টার পুনঃস্থাপন করুন।')}</p>
             </div>
           ) : (
             <div className="border-t border-line">
+              {error && (
+                <p role="status" className="py-3 text-sm text-ink-muted">
+                  {t('Showing saved laws while the latest content refreshes.', 'সর্বশেষ বিষয়বস্তু হালনাগাদ হওয়ার সময় সংরক্ষিত নিয়ম দেখানো হচ্ছে।')}
+                </p>
+              )}
               {filtered.map((law) => (
                 <Link
                   key={law.slug}
@@ -162,17 +175,17 @@ export default function LawsPage() {
                   </div>
                   <div className="col-span-10 sm:col-span-8">
                     <h3 className="font-display text-lg md:text-xl leading-[1.3] text-ink group-hover:text-forest-600 transition-colors">
-                      {language === 'en' ? law.titleEn : law.titleBn}
+                      {tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}
                     </h3>
                     <p className="mt-2 text-sm leading-[1.65] text-ink-muted max-w-2xl line-clamp-2">
-                      {language === 'en' ? law.shortEn : law.shortBn}
+                      {tx(`law:${law.slug}:short`, law.shortEn, law.shortBn)}
                     </p>
                   </div>
                   <div className="hidden sm:flex col-span-3 items-center justify-end gap-2">
                     <span className="text-xs text-ink-muted">
                       {(() => {
                         const c = categories.find((c) => c.id === law.category);
-                        return c ? (language === 'en' ? c.labelEn : c.labelBn) : law.category;
+                        return c ? tx(`category:${c.id}:label`, c.labelEn, c.labelBn) : law.category;
                       })()}
                     </span>
                     <ArrowRight className="h-4 w-4 text-ink-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />

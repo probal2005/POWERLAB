@@ -11,6 +11,7 @@ const HomePage = lazy(() => import('@/pages/HomePage'));
 const LawsPage = lazy(() => import('@/pages/LawsPage'));
 const LessonPage = lazy(() => import('@/pages/LessonPage'));
 const AboutPage = lazy(() => import('@/pages/AboutPage'));
+const AssessmentsPage = lazy(() => import('@/pages/AssessmentsPage'));
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/RegisterPage'));
 const StudentDashboardPage = lazy(
@@ -25,6 +26,16 @@ const AdminDashboardPage = lazy(
 );
 const AdminSectionPage = lazy(
   () => import('@/pages/admin/AdminSectionPage')
+);
+const AdminCertificationPage = lazy(
+  () => import('@/pages/admin/AdminCertificationPage')
+);
+const AdminLanguagesPage = lazy(
+  () => import('@/pages/admin/AdminLanguagesPage')
+);
+const CertificationPage = lazy(() => import('@/pages/CertificationPage'));
+const CertificateVerificationPage = lazy(
+  () => import('@/pages/CertificateVerificationPage')
 );
 const AdminLawsPage = lazy(
   () => import('@/pages/admin/AdminLawsPage')
@@ -60,14 +71,12 @@ export default function App() {
                   <Route path="/laws" element={<LawsPage />} />
                   <Route path="/laws/:slug" element={<LessonPage />} />
                   <Route path="/about" element={<AboutPage />} />
+                  <Route path="/assessments" element={<AssessmentsPage />} />
+                  <Route path="/verify-certificate" element={<CertificateVerificationPage />} />
 
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
 
-                  <Route
-                    path="/assessment/final"
-                    element={<AssessmentPage final />}
-                  />
                   <Route
                     path="/assessment/:lawSlug"
                     element={<AssessmentPage />}
@@ -81,12 +90,16 @@ export default function App() {
                     path="/student"
                     element={<StudentDashboardPage />}
                   />
+                  <Route path="/certification" element={<CertificationPage />} />
+                  <Route path="/assessment/final" element={<CertificationPage />} />
                 </Route>
 
                 <Route element={<ProtectedRoute requiredRole="admin" />}>
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="laws" element={<AdminLawsPage />} />
+                    <Route path="certification" element={<AdminCertificationPage />} />
+                    <Route path="languages" element={<AdminLanguagesPage />} />
                     <Route path="categories" element={<AdminSectionPage />} />
                     <Route path="assessments" element={<AdminSectionPage />} />
                     <Route path="users" element={<AdminSectionPage />} />
