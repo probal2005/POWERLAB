@@ -146,7 +146,7 @@ export default function LawsPage() {
             <p role="status" className="border-t border-line py-16 text-center text-sm text-ink-muted">
               {t('Loading the law directory…', 'নিয়মের তালিকা লোড হচ্ছে…')}
             </p>
-          ) : error ? (
+          ) : error && laws.length === 0 ? (
             <p role="alert" className="border-t border-line py-16 text-center text-sm text-error">
               {t('The law directory could not be loaded. Please refresh the page and try again.', 'নিয়মের তালিকা লোড হয়নি। পৃষ্ঠাটি রিফ্রেশ করে আবার চেষ্টা করুন।')}
             </p>
@@ -157,6 +157,11 @@ export default function LawsPage() {
             </div>
           ) : (
             <div className="border-t border-line">
+              {error && (
+                <p role="status" className="py-3 text-sm text-ink-muted">
+                  {t('Showing saved laws while the latest content refreshes.', 'সর্বশেষ বিষয়বস্তু হালনাগাদ হওয়ার সময় সংরক্ষিত নিয়ম দেখানো হচ্ছে।')}
+                </p>
+              )}
               {filtered.map((law) => (
                 <Link
                   key={law.slug}

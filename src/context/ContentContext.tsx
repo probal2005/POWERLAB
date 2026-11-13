@@ -21,15 +21,13 @@ type ContentContextValue = {
 
 const ContentContext = createContext<ContentContextValue | undefined>(undefined);
 type ContentPayload = { laws: Law[]; categories: Category[] };
-const CONTENT_CACHE_KEY = 'powerlab:shared-content:v1';
-const CONTENT_CACHE_TTL_MS = 5 * 60 * 1000;
+const CONTENT_CACHE_KEY = 'powerlab:shared-content:v2';
 
 function readCachedContent(): ContentPayload | null {
   try {
-    const raw = sessionStorage.getItem(CONTENT_CACHE_KEY);
+    const raw = localStorage.getItem(CONTENT_CACHE_KEY);
     if (!raw) return null;
-    const cached = JSON.parse(raw) as { savedAt?: number; content?: ContentPayload };
-    if (!cached.savedAt || Date.now() - cached.savedAt > CONTENT_CACHE_TTL_MS) return null;
+    const cached = JSON.parse(raw) as { content?: ContentPayload };
     if (!Array.isArray(cached.content?.laws) || !Array.isArray(cached.content?.categories)) return null;
     return cached.content;
   } catch {
@@ -57,7 +55,10 @@ function toDatabase(law: Law) {
 }
 
 export function ContentProvider({ children }: { children: ReactNode }) {
-  const [content, setContent] = useState<ContentPayload>(() => readCachedContent() ?? { laws: [], categories: [] });
+  const [content, setContent] = useState<ContentPayload>(() => {
+    const cached = readCachedContent();
+    return cached ?? { laws: [], categories: [] };
+  });
   const [loading, setLoading] = useState(() => readCachedContent() === null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +79,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       })),
     };
     setContent(nextContent);
-    try { sessionStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), content: nextContent })); } catch { /* storage can be disabled or full */ }
+    try { localStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), content: nextContent })); } catch { /* storage can be disabled or full */ }
     setError(null);
     setLoading(false);
     return true;
