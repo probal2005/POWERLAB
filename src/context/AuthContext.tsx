@@ -184,6 +184,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const loadedProfile = await loadProfile(data.user.id, requestId);
 
+        if (requestId === profileRequestId.current) {
+          currentProfileUserId.current = data.user.id;
+          setUser(data.user);
+          setLoading(false);
+        }
+
         return {
           error: null,
           role: loadedProfile.role,
