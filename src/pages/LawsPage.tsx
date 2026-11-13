@@ -7,7 +7,7 @@ import { useContent } from '@/context/ContentContext';
 type SortKey = 'number' | 'title';
 
 export default function LawsPage() {
-  const { t, language } = useLanguage();
+  const { t, tx, language } = useLanguage();
   const { laws, categories, loading, error } = useContent();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>('all');
@@ -29,14 +29,14 @@ export default function LawsPage() {
     });
     list = [...list].sort((a, b) => {
       if (sort === 'title') {
-        const ta = language === 'en' ? a.titleEn : a.titleBn;
-        const tb = language === 'en' ? b.titleEn : b.titleBn;
+        const ta = tx(`law:${a.slug}:title`, a.titleEn, a.titleBn);
+        const tb = tx(`law:${b.slug}:title`, b.titleEn, b.titleBn);
         return ta.localeCompare(tb);
       }
       return a.number - b.number;
     });
     return list;
-  }, [laws, query, category, sort, language]);
+  }, [laws, query, category, sort, tx]);
 
   const activeCat = categories.find((c) => c.id === category);
 
@@ -103,7 +103,7 @@ export default function LawsPage() {
                   </FilterChip>
                   {categories.map((c) => (
                     <FilterChip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>
-                      {language === 'en' ? c.labelEn : c.labelBn}
+                      {tx(`category:${c.id}:label`, c.labelEn, c.labelBn)}
                     </FilterChip>
                   ))}
                 </div>
@@ -130,7 +130,7 @@ export default function LawsPage() {
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm text-ink-muted">
               {loading ? '—' : filtered.length} {t('of', 'এর মধ্যে')} 48 {t('laws', 'নিয়ম')}
-              {activeCat && ` · ${language === 'en' ? activeCat.labelEn : activeCat.labelBn}`}
+              {activeCat && ` · ${tx(`category:${activeCat.id}:label`, activeCat.labelEn, activeCat.labelBn)}`}
             </p>
             {(query || category !== 'all') && (
               <button
@@ -175,17 +175,17 @@ export default function LawsPage() {
                   </div>
                   <div className="col-span-10 sm:col-span-8">
                     <h3 className="font-display text-lg md:text-xl leading-[1.3] text-ink group-hover:text-forest-600 transition-colors">
-                      {language === 'en' ? law.titleEn : law.titleBn}
+                      {tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}
                     </h3>
                     <p className="mt-2 text-sm leading-[1.65] text-ink-muted max-w-2xl line-clamp-2">
-                      {language === 'en' ? law.shortEn : law.shortBn}
+                      {tx(`law:${law.slug}:short`, law.shortEn, law.shortBn)}
                     </p>
                   </div>
                   <div className="hidden sm:flex col-span-3 items-center justify-end gap-2">
                     <span className="text-xs text-ink-muted">
                       {(() => {
                         const c = categories.find((c) => c.id === law.category);
-                        return c ? (language === 'en' ? c.labelEn : c.labelBn) : law.category;
+                        return c ? tx(`category:${c.id}:label`, c.labelEn, c.labelBn) : law.category;
                       })()}
                     </span>
                     <ArrowRight className="h-4 w-4 text-ink-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />

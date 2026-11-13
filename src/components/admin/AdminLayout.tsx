@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Users,
   Settings,
+  Languages,
   ArrowUpRight,
   Menu,
   X,
@@ -23,6 +24,7 @@ const navigation = [
   { label: 'Certification', path: '/admin/certification', icon: ClipboardList },
   { label: 'Users', path: '/admin/users', icon: Users },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
+  { label: 'Languages', path: '/admin/languages', icon: Languages },
 ];
 
 export default function AdminLayout() {

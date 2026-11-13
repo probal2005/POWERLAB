@@ -5,7 +5,7 @@ import { useContent } from '@/context/ContentContext';
 import PsychologyCarousel from '@/components/PsychologyCarousel';
 
 export default function HomePage() {
-  const { t, language } = useLanguage();
+  const { t, tx, language } = useLanguage();
   const { laws, categories, loading, error } = useContent();
   const featuredNumbers = [1, 3, 25];
   const featured = laws
@@ -83,10 +83,10 @@ export default function HomePage() {
                     <ArrowRight className="h-4 w-4 text-ink-muted opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
                   </div>
                   <h3 className="font-display text-lg leading-snug text-ink group-hover:text-forest-600">
-                    {language === 'en' ? law.titleEn : law.titleBn}
+                    {tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}
                   </h3>
                   <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-ink-muted">
-                    {language === 'en' ? law.shortEn : law.shortBn}
+                    {tx(`law:${law.slug}:short`, law.shortEn, law.shortBn)}
                   </p>
                 </Link>
               ))}

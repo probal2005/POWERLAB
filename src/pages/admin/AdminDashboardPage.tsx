@@ -15,7 +15,9 @@ export default function AdminDashboardPage() {
   const published = laws.filter((law) => law.isPublished !== false);
   const drafts = laws.filter((law) => law.isPublished === false);
   const lessonsWithContent = laws.filter(
-    (law) => (law.sections?.length ?? 0) > 0
+    (law) => (law.sections ?? []).some((section) =>
+      Boolean(section.headingEn.trim() && section.headingBn.trim() && section.bodyEn.some((paragraph) => paragraph.trim()) && section.bodyBn.some((paragraph) => paragraph.trim()))
+    )
   );
 
   const stats = [
@@ -73,7 +75,7 @@ export default function AdminDashboardPage() {
               Your platform at a glance
             </h2>
           </div>
-          <span className="text-xs text-ink-muted">Live local data</span>
+          <span className="text-xs text-ink-muted">Shared website content</span>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

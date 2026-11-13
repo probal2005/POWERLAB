@@ -30,6 +30,9 @@ const AdminSectionPage = lazy(
 const AdminCertificationPage = lazy(
   () => import('@/pages/admin/AdminCertificationPage')
 );
+const AdminLanguagesPage = lazy(
+  () => import('@/pages/admin/AdminLanguagesPage')
+);
 const CertificationPage = lazy(() => import('@/pages/CertificationPage'));
 const CertificateVerificationPage = lazy(
   () => import('@/pages/CertificateVerificationPage')
@@ -96,6 +99,7 @@ export default function App() {
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="laws" element={<AdminLawsPage />} />
                     <Route path="certification" element={<AdminCertificationPage />} />
+                    <Route path="languages" element={<AdminLanguagesPage />} />
                     <Route path="categories" element={<AdminSectionPage />} />
                     <Route path="assessments" element={<AdminSectionPage />} />
                     <Route path="users" element={<AdminSectionPage />} />

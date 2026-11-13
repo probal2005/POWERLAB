@@ -5,7 +5,7 @@ import { useLanguage } from '@/context/LanguageContext';
 
 export default function AssessmentsPage() {
   const { laws, loading, error } = useContent();
-  const { language, t } = useLanguage();
+  const { language, t, tx } = useLanguage();
   const assessments = laws
     .filter((law) => law.isPublished !== false && law.assessment?.isPublished && (law.assessment.questions?.length ?? 0) > 0)
     .sort((a, b) => a.number - b.number);
@@ -58,7 +58,7 @@ export default function AssessmentsPage() {
             {assessments.map((law) => <li key={law.slug} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{t(`Law ${String(law.number).padStart(2, '0')}`, `নিয়ম ${String(law.number).padStart(2, '0')}`)}</p>
-                <h3 className={`mt-1 text-base font-semibold text-ink ${language === 'bn' ? 'font-bengali' : ''}`}>{language === 'bn' ? law.titleBn : law.titleEn}</h3>
+                <h3 className={`mt-1 text-base font-semibold text-ink ${language === 'bn' ? 'font-bengali' : ''}`}>{tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}</h3>
                 <p className="mt-1 text-xs text-ink-muted">{law.assessment?.questions.length ?? 0} {t('questions', 'টি প্রশ্ন')}</p>
               </div>
               <Link to={`/assessment/${law.slug}`} className="btn-secondary w-fit">{t('Start assessment', 'মূল্যায়ন শুরু করুন')}<ArrowRight size={15} /></Link>

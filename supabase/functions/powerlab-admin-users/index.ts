@@ -57,7 +57,7 @@ Deno.serve(async (request) => {
     .maybeSingle();
   if (callerError || caller?.role !== "admin") return response(403, { error: "Administrator permission required." });
 
-  let body: { action?: unknown; userId?: unknown; role?: unknown };
+  let body: { action?: unknown; userId?: unknown; role?: unknown; offset?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -65,13 +65,15 @@ Deno.serve(async (request) => {
   }
 
   if (body.action === "list") {
-    const { data, error } = await adminClient
+    const requestedOffset = typeof body.offset === "number" ? body.offset : 0;
+    const offset = Number.isInteger(requestedOffset) ? Math.max(0, Math.min(requestedOffset, 1000000)) : 0;
+    const { data, count, error } = await adminClient
       .from("profiles")
-      .select("id,email,full_name,role,created_at")
+      .select("id,email,full_name,role,created_at", { count: "exact" })
       .order("created_at", { ascending: false })
-      .limit(200);
+      .range(offset, offset + 99);
     if (error) return response(500, { error: "Could not load user accounts." });
-    return response(200, { users: data ?? [] });
+    return response(200, { users: data ?? [], total: count ?? 0, offset });
   }
 
   if (body.action === "update-role") {

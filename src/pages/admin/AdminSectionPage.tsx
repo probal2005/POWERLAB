@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, ClipboardCheck, Construction, Plus, Save, Search, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Construction, Plus, Save, Search, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { useContent } from '@/context/ContentContext';
 import { supabase } from '@/lib/supabase';
 import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
@@ -155,7 +155,7 @@ function CategoryManager() {
           <button type="button" onClick={() => void removeCategory(category.id)} className="btn-ghost self-end text-red-700" aria-label={`Delete ${category.id}`}><Trash2 size={16} /></button>
         </div>;
       })}
-      {(message || error) && <p role="status" className="text-sm text-red-700">{message || error}</p>}
+      {(message || error) && <p role={error ? 'alert' : 'status'} className={`border p-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || message}</p>}
     </div>
   );
 }
@@ -203,26 +203,31 @@ type ManagedUser = { id: string; email: string | null; full_name: string; role: 
 
 function UserManager() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  async function loadUsers() {
+  const pageSize = 100;
+  const loadUsers = useCallback(async (nextOffset: number) => {
     setLoading(true);
     setError('');
-    const { data, error: requestError } = await supabase.functions.invoke('powerlab-admin-users', { body: { action: 'list' } });
+    const { data, error: requestError } = await supabase.functions.invoke('powerlab-admin-users', { body: { action: 'list', offset: nextOffset } });
     if (requestError) {
       setError(requestError.message || 'Could not load user accounts.');
       setUsers([]);
     } else {
       setUsers((data?.users ?? []) as ManagedUser[]);
+      setTotalUsers(Number(data?.total ?? 0));
+      setOffset(nextOffset);
     }
     setLoading(false);
-  }
+  }, []);
 
-  useEffect(() => { void loadUsers(); }, []);
+  useEffect(() => { void loadUsers(0); }, [loadUsers]);
 
   async function changeRole(user: ManagedUser, role: ManagedUser['role']) {
     if (user.role === role) return;
@@ -249,8 +254,8 @@ function UserManager() {
       <div className="flex h-10 items-center gap-2 border border-line bg-surface px-3 text-xs text-ink-muted"><ShieldCheck size={16} className="text-forest-700" />Protected administrator access</div>
     </div>
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <label className="relative block w-full sm:max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" /><input className="field-input pl-9" aria-label="Search users" placeholder="Search name or email" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-      <p className="text-sm text-ink-muted">{users.length} accounts</p>
+      <label className="relative block w-full sm:max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" /><input className="field-input pl-9" aria-label="Search this page of users" placeholder="Search this page" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <div className="flex items-center gap-3"><p className="text-sm text-ink-muted">{totalUsers} accounts · {totalUsers ? `${offset + 1}–${Math.min(offset + users.length, totalUsers)}` : '0'}</p><button type="button" className="btn-secondary" disabled={loading} onClick={() => void loadUsers(offset)}>Refresh</button></div>
     </div>
     {(error || message) && <p role={error ? 'alert' : 'status'} className={`border p-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || message}</p>}
     <div className="divide-y divide-line border border-line bg-surface">
@@ -259,5 +264,6 @@ function UserManager() {
         <label className="flex items-center gap-3 text-xs text-ink-muted">Role<select className="field-input w-auto" aria-label={`Role for ${user.email || user.full_name}`} value={user.role} disabled={savingId === user.id} onChange={(event) => void changeRole(user, event.target.value as ManagedUser['role'])}><option value="student">Student</option><option value="admin">Administrator</option></select>{savingId === user.id && <span>Saving…</span>}</label>
       </article>)}
     </div>
+    <div className="flex items-center justify-between gap-4"><p className="text-xs text-ink-muted">Page {Math.floor(offset / pageSize) + 1} of {Math.max(1, Math.ceil(totalUsers / pageSize))}</p><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={loading || offset === 0} onClick={() => void loadUsers(Math.max(0, offset - pageSize))}><ChevronLeft size={15} /> Previous</button><button type="button" className="btn-secondary" disabled={loading || offset + pageSize >= totalUsers} onClick={() => void loadUsers(offset + pageSize)}>Next <ChevronRight size={15} /></button></div></div>
   </div>;
 }

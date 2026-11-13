@@ -96,8 +96,14 @@ const perspectives: Perspective[] = [
   },
 ];
 
+// eslint-disable-next-line react-refresh/only-export-components
+export const psychologyTranslationCatalog = perspectives.flatMap((item, index) => [
+  { key: `psychology:${index}:title`, english: item.titleEn, bengali: item.titleBn, label: `${item.name} · title` },
+  { key: `psychology:${index}:description`, english: item.ideaEn, bengali: item.ideaBn, label: `${item.name} · summary` },
+]);
+
 export default function PsychologyCarousel() {
-  const { t, language } = useLanguage();
+  const { t, tx } = useLanguage();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -162,10 +168,10 @@ export default function PsychologyCarousel() {
           <div className="mt-6 min-h-36" aria-live={paused || hovered || focused ? 'polite' : 'off'} aria-atomic="true">
             <p className="eyebrow text-ink-muted">{current.name}</p>
             <h3 className="mt-2 font-display text-2xl leading-tight text-ink sm:text-3xl">
-              {language === 'en' ? current.titleEn : current.titleBn}
+              {tx(`psychology:${index}:title`, current.titleEn, current.titleBn)}
             </h3>
             <p className="mt-3 max-w-3xl text-base leading-relaxed text-ink/85 sm:text-lg">
-              {language === 'en' ? current.ideaEn : current.ideaBn}
+              {tx(`psychology:${index}:description`, current.ideaEn, current.ideaBn)}
             </p>
           </div>
 
