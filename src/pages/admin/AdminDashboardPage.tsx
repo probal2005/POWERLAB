@@ -1,3 +1,4 @@
+import VisitorHistory from '@/components/admin/VisitorHistory';
 import { ViewerCount } from '@/components/ViewerPresence';
 import PlatformHealth from '@/components/admin/PlatformHealth';
 import { Link } from 'react-router-dom';
@@ -75,6 +76,7 @@ export default function AdminDashboardPage() {
       </section>
 
       <div className="grid gap-4 md:grid-cols-2"><ViewerCount /><PlatformHealth /></div>
+      <VisitorHistory />
 
       {loading && <p role="status" className="text-sm text-ink-muted">Loading content statistics…</p>}
       {error && <div role="alert" className="flex flex-wrap items-center gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-800">
