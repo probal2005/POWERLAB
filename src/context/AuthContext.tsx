@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileError, setProfileError] = useState<string | null>(null);
   const profileRequestId = useRef(0);
   const currentProfileUserId = useRef<string | null>(null);
+  const profileLoadedForUserId = useRef<string | null>(null);
 
   const loadProfile = useCallback(async (
     userId: string,
@@ -68,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) {
       if (isCurrentRequest()) {
         setProfile(null);
+        profileLoadedForUserId.current = null;
         setProfileError(error.message);
       }
       throw error;
@@ -76,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!data) {
       if (isCurrentRequest()) {
         setProfile(null);
+        profileLoadedForUserId.current = null;
         setProfileError(
           'Your account profile was not created. Please contact the administrator.'
         );
@@ -86,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.role !== 'student' && data.role !== 'admin') {
       if (isCurrentRequest()) {
         setProfile(null);
+        profileLoadedForUserId.current = null;
         setProfileError('Your account has an invalid access role.');
       }
       throw new Error('Invalid account role.');
@@ -96,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isCurrentRequest()) {
       setProfile(validatedProfile);
       setProfileError(null);
+      profileLoadedForUserId.current = userId;
     }
 
     return validatedProfile;
@@ -106,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!user) {
       currentProfileUserId.current = null;
+      profileLoadedForUserId.current = null;
       setProfile(null);
       setProfileError(null);
       return;
@@ -115,7 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loadProfile]);
 
   useEffect(() => {
+    const requests = profileRequestId;
     let active = true;
+    let profileTimer: ReturnType<typeof setTimeout> | undefined;
 
     const {
       data: { subscription },
@@ -123,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (_event, session: Session | null) => {
         if (!active) return;
 
+        clearTimeout(profileTimer);
         const requestId = ++profileRequestId.current;
         const currentUser = session?.user ?? null;
 
@@ -132,9 +141,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           currentProfileUserId.current = currentUser?.id ?? null;
           setProfile(null);
           setProfileError(null);
+          profileLoadedForUserId.current = null;
         }
 
         if (!currentUser) {
+          setLoading(false);
+          profileLoadedForUserId.current = null;
+          return;
+        }
+
+        if (profileLoadedForUserId.current === currentUser.id) {
           setLoading(false);
           return;
         }
@@ -142,21 +158,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(true);
 
         // Defer the profile query until after the auth callback completes.
-        void Promise.resolve()
-          .then(() => loadProfile(currentUser.id, requestId))
-          .catch(() => {
-            // The detailed error is stored in profileError.
-          })
-          .finally(() => {
-            if (active && requestId === profileRequestId.current) {
-              setLoading(false);
-            }
-          });
+        profileTimer = setTimeout(() => {
+          if (requestId !== profileRequestId.current) return;
+          void loadProfile(currentUser.id, requestId)
+            .catch(() => {
+              // The detailed error is stored in profileError.
+            })
+            .finally(() => {
+              if (active && requestId === profileRequestId.current) {
+                setLoading(false);
+              }
+            });
+        }, 0);
       }
     );
 
     return () => {
       active = false;
+      clearTimeout(profileTimer);
+      ++requests.current;
       subscription.unsubscribe();
     };
   }, [loadProfile]);
@@ -184,6 +204,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const loadedProfile = await loadProfile(data.user.id, requestId);
 
+        if (requestId === profileRequestId.current) {
+          currentProfileUserId.current = data.user.id;
+          setUser(data.user);
+          setLoading(false);
+        }
+
         return {
           error: null,
           role: loadedProfile.role,
@@ -197,9 +223,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (requestId === profileRequestId.current) {
           setProfile(null);
           setProfileError(message);
+          profileLoadedForUserId.current = null;
+          setLoading(false);
+          await supabase.auth.signOut();
         }
-
-        await supabase.auth.signOut();
 
         return { error: message, role: null };
       }
@@ -228,8 +255,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    ++profileRequestId.current;
-
     const { error } = await supabase.auth.signOut();
     return { error: error?.message ?? null };
   }, []);

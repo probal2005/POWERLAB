@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Plus, Save, Search, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { useContent } from '@/context/ContentContext';
@@ -122,6 +122,7 @@ type ManagedUser = { id: string; email: string | null; full_name: string; role: 
 
 function UserManager() {
   const { user: signedInUser } = useAuth();
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [totalUsers, setTotalUsers] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -132,27 +133,40 @@ function UserManager() {
   const [message, setMessage] = useState('');
 
   const pageSize = 100;
-  const loadUsers = useCallback(async (nextOffset: number) => {
-    setLoading(true);
+  const latestRequest = useRef(0);
+  const loadUsers = useCallback(async (nextOffset: number, background = false) => {
+    const request = ++latestRequest.current;
+    if (!background) setLoading(true);
     setError('');
     const { data, error: requestError } = await supabase.functions.invoke('powerlab-admin-users', { body: { action: 'list', offset: nextOffset } });
+    if (request !== latestRequest.current) return;
     if (requestError) {
       setError(requestError.message || 'Could not load user accounts.');
-      setUsers([]);
+      if (!background) setUsers([]);
     } else {
       setUsers((data?.users ?? []) as ManagedUser[]);
       setTotalUsers(Number(data?.total ?? 0));
       setOffset(nextOffset);
+      setLastSync(new Date());
     }
     setLoading(false);
   }, []);
 
   useEffect(() => { void loadUsers(0); }, [loadUsers]);
 
+  useEffect(() => {
+    if (loading || savingId) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void loadUsers(offset, true);
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [loadUsers, loading, offset, savingId]);
+
   async function changeRole(user: ManagedUser, role: ManagedUser['role']) {
     if (user.role === role) return;
     const action = role === 'admin' ? 'promote to administrator' : 'change to student';
     if (!window.confirm(`Are you sure you want to ${action} ${user.email || user.full_name || 'this account'}?`)) return;
+    ++latestRequest.current;
     setSavingId(user.id);
     setError('');
     setMessage('');
@@ -177,6 +191,7 @@ function UserManager() {
       <label className="relative block w-full sm:max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" /><input className="field-input pl-9" aria-label="Search this page of users" placeholder="Search this page" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       <div className="flex items-center gap-3"><p className="text-sm text-ink-muted">{totalUsers} accounts · {totalUsers ? `${offset + 1}–${Math.min(offset + users.length, totalUsers)}` : '0'}</p><button type="button" className="btn-secondary" disabled={loading} onClick={() => void loadUsers(offset)}>Refresh</button></div>
     </div>
+    {lastSync && <p className="text-xs text-ink-muted">Account data refreshes every 15 seconds while open. Last synced <time dateTime={lastSync.toISOString()}>{lastSync.toLocaleTimeString()}</time>.</p>}
     {(error || message) && <p role={error ? 'alert' : 'status'} className={`border p-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || message}</p>}
     <div className="divide-y divide-line border border-line bg-surface">
       {loading ? <p className="p-6 text-sm text-ink-muted">Loading accounts…</p> : filtered.length === 0 ? <p className="p-6 text-sm text-ink-muted">{users.length ? 'No accounts match your search.' : 'No user accounts were found.'}</p> : filtered.map((user) => <article key={user.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">

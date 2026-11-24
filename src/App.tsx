@@ -20,6 +20,7 @@ const AssessmentPage = lazy(() => import('@/pages/AssessmentPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
 const CertificateManagement = lazy(() => import('@/components/admin/CertificateManagement'));
+const AdminLanguagesPage = lazy(() => import('@/pages/admin/AdminLanguagesPage'));
 const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'));
 const AdminDashboardPage = lazy(
   () => import('@/pages/admin/AdminDashboardPage')
@@ -93,6 +94,7 @@ export default function App() {
                     <Route path="assessments" element={<AdminSectionPage />} />
                     <Route path="users" element={<AdminSectionPage />} />
                     <Route path="settings" element={<AdminSectionPage />} />
+                    <Route path="languages" element={<AdminLanguagesPage />} />
                   </Route>
                 </Route>
               </Routes>

@@ -6,7 +6,7 @@ import BrandLogo from './BrandLogo';
 import { useAuth } from '@/context/AuthContext';
 
 export default function Navbar() {
-  const { language, setLanguage, t } = useLanguage();
+  const { language, languages, setLanguage, t } = useLanguage();
   const { user, profile, loading } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -74,34 +74,21 @@ export default function Navbar() {
             <button
               onClick={() => setLangOpen((o) => !o)}
               className="btn-ghost px-3 py-2"
-              aria-haspopup="listbox"
               aria-expanded={langOpen}
               aria-label="Select language"
             >
               <Languages className="h-4 w-4" />
-              <span className="text-xs font-semibold">{language === 'en' ? 'EN' : 'বাংলা'}</span>
+              <span className="text-xs font-semibold">{languages.find((item) => item.code === language)?.nameNative ?? language}</span>
               <ChevronDown className={`h-3 w-3 transition-transform ${langOpen ? 'rotate-180' : ''}`} />
             </button>
             {langOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setLangOpen(false)} />
-                <div className="absolute right-0 mt-2 w-36 z-50 surface-card shadow-soft overflow-hidden">
-                  <button
-                    onClick={() => { setLanguage('en'); setLangOpen(false); }}
-                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-canvas-2 ${
-                      language === 'en' ? 'text-forest-600 font-semibold' : 'text-ink'
-                    }`}
-                  >
-                    English
-                  </button>
-                  <button
-                    onClick={() => { setLanguage('bn'); setLangOpen(false); }}
-                    className={`w-full px-4 py-2.5 text-left text-sm font-bengali transition-colors hover:bg-canvas-2 ${
-                      language === 'bn' ? 'text-forest-600 font-semibold' : 'text-ink'
-                    }`}
-                  >
-                    বাংলা
-                  </button>
+                <div className="absolute right-0 mt-2 w-44 z-50 surface-card shadow-soft max-h-[60vh] overflow-auto">
+                  {languages.map((item) => <button type="button" key={item.code} lang={item.code}
+                    aria-pressed={language === item.code}
+                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-canvas-2"
+                    onClick={() => { setLanguage(item.code); setLangOpen(false); }}>{item.nameNative}</button>)}
                 </div>
               </>
             )}
