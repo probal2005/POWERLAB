@@ -10,7 +10,7 @@ import {
 import { useContent } from '@/context/ContentContext';
 
 export default function AdminDashboardPage() {
-  const { laws, categories } = useContent();
+  const { laws, categories, loading, error, refresh } = useContent();
 
   const published = laws.filter((law) => law.isPublished !== false);
   const drafts = laws.filter((law) => law.isPublished === false);
@@ -19,6 +19,11 @@ export default function AdminDashboardPage() {
       Boolean(section.headingEn.trim() && section.headingBn.trim() && section.bodyEn.some((paragraph) => paragraph.trim()) && section.bodyBn.some((paragraph) => paragraph.trim()))
     )
   );
+
+  const publishedAssessments = published.filter((law) =>
+    law.assessment?.isPublished && law.assessment.questions.length > 0
+  ).length;
+  const lessonCoverage = laws.length ? Math.round(lessonsWithContent.length * 100 / laws.length) : 0;
 
   const stats = [
     {
@@ -67,7 +72,13 @@ export default function AdminDashboardPage() {
         </Link>
       </section>
 
-      <section>
+      {loading && <p role="status" className="text-sm text-ink-muted">Loading content statistics…</p>}
+      {error && <div role="alert" className="flex flex-wrap items-center gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <p>{error}</p>
+        <button type="button" className="btn-secondary" onClick={() => void refresh()}>Retry</button>
+      </div>}
+
+      <section aria-busy={loading}>
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="eyebrow">Content statistics</p>
@@ -96,7 +107,7 @@ export default function AdminDashboardPage() {
                   </span>
                 </div>
                 <p className="mt-5 font-display text-4xl text-ink">
-                  {stat.value}
+                  {loading ? '—' : stat.value}
                 </p>
                 <p className="mt-1 text-xs text-ink-muted">{stat.detail}</p>
               </article>
@@ -123,22 +134,16 @@ export default function AdminDashboardPage() {
               </span>
             </p>
             <p className="text-xs text-ink-muted">
-              {laws.length
-                ? Math.round((lessonsWithContent.length / laws.length) * 100)
-                : 0}
+              {lessonCoverage}
               % coverage
             </p>
           </div>
 
-          <div className="mt-4 h-2 overflow-hidden bg-canvas-2">
+          <div role="progressbar" aria-label="Lesson coverage" aria-valuenow={lessonCoverage} className="mt-4 h-2 overflow-hidden bg-canvas-2">
             <div
               className="h-full bg-forest-600 transition-all"
               style={{
-                width: `${
-                  laws.length
-                    ? (lessonsWithContent.length / laws.length) * 100
-                    : 0
-                }%`,
+                width: `${lessonCoverage}%`,
               }}
             />
           </div>
@@ -146,7 +151,7 @@ export default function AdminDashboardPage() {
           <div className="mt-6 flex flex-wrap gap-5 text-xs text-ink-muted">
             <span>{published.length} published</span>
             <span>{drafts.length} drafts</span>
-            <span>{lessonsWithContent.length} with lesson content</span>
+            <span>{publishedAssessments} with published assessments</span>
           </div>
         </div>
 
@@ -214,11 +219,10 @@ export default function AdminDashboardPage() {
         </div>
       </section>
 
-      <section className="border border-line bg-surface p-5 sm:p-6">
-        <h2 className="text-sm font-semibold text-ink">Publishing checklist</h2>
-        <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          Review both language versions before publishing. Laws without lesson sections remain visible in the library, but the lesson page will ask students to return later. Add reviewed source material before publishing complete lesson content.
-        </p>
+      <section aria-label="Programme administration" className="flex flex-wrap gap-3">
+        <Link className="btn-secondary" to="/admin/certification">Review certification</Link>
+        <Link className="btn-secondary" to="/admin/users">Manage accounts</Link>
+        <Link className="btn-secondary" to="/admin/languages">Manage languages</Link>
       </section>
     </div>
   );

@@ -65,7 +65,7 @@ export default function AdminLayout() {
   }
 
   const sidebar = (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col overflow-y-auto">
       <div className="flex h-20 items-center justify-between border-b border-line px-6">
         <Link to="/admin" className="flex items-center gap-3">
           <BrandLogo variant="sidebar" className="h-14 w-28" />

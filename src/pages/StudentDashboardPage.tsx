@@ -21,7 +21,7 @@ type AttemptRow = { id: string; law_slug: string; created_at: string; score: num
 
 export default function StudentDashboardPage() {
   const { user, profile, signOut } = useAuth();
-  const { laws } = useContent();
+  const { laws, loading: contentLoading, error: contentError } = useContent();
   const { language, t, tx } = useLanguage();
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
@@ -36,8 +36,9 @@ export default function StudentDashboardPage() {
     let active = true;
     if (!user) return;
     setLearningLoading(true);
+    setLearningError('');
     void Promise.all([
-      supabase.from('student_law_progress').select('law_slug,status,last_viewed_at').eq('user_id', user.id).order('last_viewed_at', { ascending: false }).limit(48),
+      supabase.from('student_law_progress').select('law_slug,status,last_viewed_at').eq('user_id', user.id).order('last_viewed_at', { ascending: false }),
       supabase.from('student_bookmarks').select('law_slug').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('student_assessment_attempts').select('id,law_slug,created_at,score,total_questions,percentage,passed').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
     ]).then(([progressResult, bookmarkResult, attemptResult]) => {
@@ -105,7 +106,7 @@ export default function StudentDashboardPage() {
 
           <div className="mt-4 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
-              <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
+              <h1 className="break-words font-display text-3xl tracking-tight text-ink sm:text-4xl">
                 {t(`Welcome back, ${displayName}`, `স্বাগতম, ${displayName}`)}
               </h1>
 
@@ -121,12 +122,12 @@ export default function StudentDashboardPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-3">
+        <section aria-busy={learningLoading} className="grid gap-4 sm:grid-cols-3">
           {[
             { label: t('Lessons started', 'শুরু করা পাঠ'), value: progress.length, Icon: BookOpen },
             { label: t('Lessons completed', 'সম্পন্ন পাঠ'), value: completedCount, Icon: GraduationCap },
             { label: t('Saved lessons', 'সংরক্ষিত পাঠ'), value: bookmarks.length, Icon: Bookmark },
-          ].map(({ label, value, Icon }) => <div key={label} className="border border-line bg-surface p-5"><Icon size={19} className="text-forest-700" /><p className="mt-4 font-display text-3xl text-ink">{value}</p><p className="mt-1 text-xs text-ink-muted">{label}</p></div>)}
+          ].map(({ label, value, Icon }) => <div key={label} className="border border-line bg-surface p-5"><Icon size={19} className="text-forest-700" /><p className="mt-4 font-display text-3xl text-ink">{learningLoading ? '—' : value}</p><p className="mt-1 text-xs text-ink-muted">{label}</p></div>)}
         </section>
 
         <section className="grid gap-5 md:grid-cols-2">
@@ -181,12 +182,12 @@ export default function StudentDashboardPage() {
           <span className="btn-secondary w-fit">View certification</span>
         </Link>
 
-        {learningError && <p role="status" className="border border-bronze-200 bg-bronze-50 p-4 text-sm text-ink-muted">{learningError}</p>}
+        {(learningError || contentError) && <p role="status" className="border border-bronze-200 bg-bronze-50 p-4 text-sm text-ink-muted">{learningError || contentError}</p>}
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="border border-line bg-surface p-6 sm:p-8">
             <div className="flex items-center justify-between gap-3"><h2 className="font-display text-xl text-ink">{t('Continue learning', 'শেখা চালিয়ে যান')}</h2><Clock3 size={19} className="text-forest-700" /></div>
-            {learningLoading ? <p className="mt-5 text-sm text-ink-muted">{t('Loading your learning data…', 'আপনার শেখার তথ্য লোড হচ্ছে…')}</p> : progress.length === 0 ? <p className="mt-5 text-sm text-ink-muted">{t('Your lesson activity will appear here as you study.', 'আপনি পড়াশোনা শুরু করলে আপনার পাঠের অগ্রগতি এখানে দেখা যাবে।')}</p> : <ul className="mt-5 divide-y divide-line">{progress.slice(0, 5).map((item) => { const law = lawBySlug.get(item.law_slug); if (!law) return null; return <li key={item.law_slug} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-medium text-ink">{tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}</p><p className="mt-1 text-xs text-ink-muted">{item.status === 'completed' ? t('Completed', 'সম্পন্ন') : t('In progress', 'চলমান')}</p></div><Link className="text-sm font-semibold text-forest-700 hover:underline" to={`/laws/${law.slug}`}>{t('Open', 'খুলুন')}</Link></li>; })}</ul>}
+            {learningLoading || contentLoading ? <p role="status" className="mt-5 text-sm text-ink-muted">{t('Loading your learning data…', 'আপনার শেখার তথ্য লোড হচ্ছে…')}</p> : progress.length === 0 ? <p className="mt-5 text-sm text-ink-muted">{t('Your lesson activity will appear here as you study.', 'আপনি পড়াশোনা শুরু করলে আপনার পাঠের অগ্রগতি এখানে দেখা যাবে।')}</p> : <ul className="mt-5 divide-y divide-line">{progress.slice(0, 5).map((item) => { const law = lawBySlug.get(item.law_slug); if (!law) return null; return <li key={item.law_slug} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-medium text-ink">{tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}</p><p className="mt-1 text-xs text-ink-muted">{item.status === 'completed' ? t('Completed', 'সম্পন্ন') : t('In progress', 'চলমান')}</p></div><Link className="text-sm font-semibold text-forest-700 hover:underline" to={`/laws/${law.slug}`}>{t('Open', 'খুলুন')}</Link></li>; })}</ul>}
           </div>
 
           <div className="border border-line bg-surface p-6 sm:p-8">

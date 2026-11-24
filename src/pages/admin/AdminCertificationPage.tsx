@@ -69,7 +69,7 @@ export default function AdminCertificationPage() {
       if (ready !== 48) { setError('All 48 lessons must be reviewed and approved before enabling certification or publishing its final assessment.'); return; }
       if (patch.final_assessment_published && !(questionResult.data?.length)) { setError('Add and review questions before publishing the final assessment.'); return; }
     }
-    if (patch.programme_enabled && !next.final_assessment_published) { setError('Publish the final assessment before enabling certification.'); return; }
+    if (next.programme_enabled && !next.final_assessment_published) { setError('Publish the final assessment before enabling certification.'); return; }
     setSaving(true); setError(''); setNotice('');
     const { data: authData } = await supabase.auth.getUser();
     const { error: saveError } = await supabase.from('certification_program_settings').update({ programme_enabled: next.programme_enabled, final_assessment_published: next.final_assessment_published, pass_percentage: next.pass_percentage, updated_by: authData.user?.id ?? null }).eq('id', true);
@@ -77,24 +77,37 @@ export default function AdminCertificationPage() {
     setSaving(false);
   }
 
-  async function addQuestion() {
-    setSaving(true); setError(''); setNotice('');
-    const { data, error: saveError } = await supabase.from('certification_final_questions').insert({ ...emptyQuestion(), sort_order: questions.length + 1 }).select('*').single();
-    if (saveError) setError(saveError.message); else { setQuestions((items) => [...items, data as CertificationAdminQuestion]); setNotice('Draft question added.'); }
-    setSaving(false);
+  function addQuestion() {
+    setError('');
+    setNotice('');
+    setQuestions((items) => [...items, {
+      ...emptyQuestion(), id: crypto.randomUUID(), created_at: '', updated_at: '',
+      sort_order: Math.max(0, ...items.map((item) => item.sort_order)) + 1,
+    }]);
   }
 
   async function saveQuestion(question: CertificationAdminQuestion) {
     const payload = { question_en: question.question_en.trim(), question_bn: question.question_bn.trim(), options_en: options(question.options_en).map((value) => value.trim()), options_bn: options(question.options_bn).map((value) => value.trim()), correct_option: question.correct_option, explanation_en: question.explanation_en.trim(), explanation_bn: question.explanation_bn.trim(), is_active: question.is_active, sort_order: question.sort_order };
     if (!payload.question_en || !payload.question_bn || [...payload.options_en, ...payload.options_bn].some((value) => !value)) { setError('Complete the bilingual question and all eight answer labels before saving.'); return; }
     setSaving(true); setError(''); setNotice('');
-    const { error: saveError } = await supabase.from('certification_final_questions').update(payload).eq('id', question.id);
-    if (saveError) setError(saveError.message); else { setNotice('Question saved.'); await load(); }
+    const table = supabase.from('certification_final_questions');
+    const request = question.created_at
+      ? table.update(payload).eq('id', question.id)
+      : table.insert({ ...payload, id: question.id });
+    const { data, error: saveError } = await request.select('*').single();
+    if (saveError) setError(saveError.message); else {
+      setNotice('Question saved.');
+      setQuestions((items) => items.map((item) => item.id === question.id ? data as CertificationAdminQuestion : item));
+    }
     setSaving(false);
   }
 
   async function deleteQuestion(question: CertificationAdminQuestion) {
     if (!window.confirm('Delete this final assessment question? Existing attempts remain unchanged.')) return;
+    if (!question.created_at) {
+      setQuestions((items) => items.filter((item) => item.id !== question.id));
+      return;
+    }
     setSaving(true); setError(''); setNotice('');
     const { error: deleteError } = await supabase.from('certification_final_questions').delete().eq('id', question.id);
     if (deleteError) setError(deleteError.message); else { setQuestions((items) => items.filter((item) => item.id !== question.id)); setNotice('Question deleted.'); }

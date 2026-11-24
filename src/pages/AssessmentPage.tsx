@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -33,10 +33,11 @@ interface AssessmentAttempt {
 }
 
 export default function AssessmentPage({ final = false }: AssessmentPageProps) {
+  const location = useLocation();
   const { lawSlug } = useParams<{ lawSlug: string }>();
   const { t, tx, language } = useLanguage();
-  const { laws } = useContent();
-  const { user } = useAuth();
+  const { laws, loading, error: contentError } = useContent();
+  const { user, loading: authLoading } = useAuth();
 
   const law = final
     ? undefined
@@ -59,6 +60,8 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
     Array(questions.length).fill(-1)
   );
   const [result, setResult] = useState<AssessmentAttempt | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [history, setHistory] = useState<AssessmentAttempt[]>([]);
 
   useEffect(() => {
@@ -70,18 +73,20 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
 
   useEffect(() => {
     if (!user || !lawSlug || final) return;
+    let active = true;
     void supabase.from('student_assessment_attempts')
       .select('id, law_slug, created_at, score, percentage, passed, answers')
       .eq('user_id', user.id).eq('law_slug', lawSlug)
       .order('created_at', { ascending: false }).limit(20)
       .then(({ data, error }) => {
-        if (error || !data) return;
+        if (!active || error || !data) return;
         setHistory(data.map((item) => ({
           id: item.id, lawSlug: item.law_slug, timestamp: item.created_at,
           score: item.score, percentage: item.percentage, passed: item.passed,
           answers: item.answers as number[],
         })));
       });
+    return () => { active = false; };
   }, [user, lawSlug, final]);
 
   const question = questions[currentQuestion];
@@ -100,18 +105,21 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
   };
 
   const handleSubmit = async () => {
-    if (!isAssessmentPublished || !allAnswered || result || !law) return;
+    if (!isAssessmentPublished || !allAnswered || result || !law || submitting) return;
     if (!user) {
-      window.alert(t('Sign in to submit and save your assessment.', 'মূল্যায়ন জমা ও সংরক্ষণ করতে সাইন ইন করুন।'));
+      setSubmitError(t('Sign in to submit and save your assessment.', 'মূল্যায়ন জমা ও সংরক্ষণ করতে সাইন ইন করুন।'));
       return;
     }
 
+    setSubmitting(true);
+    setSubmitError('');
     const { data, error } = await supabase.rpc('submit_law_assessment', {
       p_law_slug: law.slug,
       p_answers: answers,
     });
+    setSubmitting(false);
     if (error) {
-      window.alert(`Could not submit assessment: ${error.message}`);
+      setSubmitError(t('Could not submit the assessment. Please try again.', 'মূল্যায়ন জমা দেওয়া যায়নি। আবার চেষ্টা করুন।'));
       return;
     }
     const saved = data as Omit<AssessmentAttempt, 'lawSlug'>;
@@ -129,6 +137,12 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
     setAnswers(Array(questions.length).fill(-1));
     setResult(null);
   };
+
+  if (!law && (loading || contentError)) {
+    return <p role={contentError ? 'alert' : 'status'} className="container-content py-20">
+      {contentError ? t('Could not load assessments. Refresh to try again.', 'মূল্যায়ন লোড করা যায়নি। আবার চেষ্টা করতে রিফ্রেশ করুন।') : t('Loading assessment…', 'মূল্যায়ন লোড হচ্ছে…')}
+    </p>;
+  }
 
   if (!final && !law) {
     return (
@@ -413,11 +427,15 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                         {t('Next question', 'পরবর্তী প্রশ্ন')}
                         <ArrowRight className="h-4 w-4" />
                       </button>
+                    ) : !user && !authLoading ? (
+                      <Link className="btn-primary" to="/login" state={{ from: location }}>
+                        {t('Sign in to submit', 'জমা দিতে সাইন ইন করুন')}
+                      </Link>
                     ) : (
                       <button
                         type="button"
                         onClick={handleSubmit}
-                        disabled={!allAnswered}
+                        disabled={!allAnswered || submitting || authLoading}
                         className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {t('Submit assessment', 'মূল্যায়ন জমা দিন')}
@@ -426,7 +444,8 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                     )}
                   </div>
 
-                  {!allAnswered && currentQuestion === questions.length - 1 && (
+                    {submitError && <p role="alert" className="text-sm text-red-700">{submitError}</p>}
+                    {!allAnswered && currentQuestion === questions.length - 1 && (
                     <p className="mt-4 text-right text-xs text-ink-muted">
                       {t(
                         `Answer all ${questions.length} questions before submitting.`,

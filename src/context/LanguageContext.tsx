@@ -83,23 +83,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    let active = true;
-    void supabase
-      .from('site_translations')
-      .select('translation_key,value')
-      .eq('language_code', language)
+    const request = new AbortController();
+    setTranslations({});
+    void supabase.rpc('get_powerlab_public_translations', { p_language: language })
+      .abortSignal(request.signal)
       .then(({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          setTranslations({});
-          return;
-        }
-        setTranslations(Object.fromEntries((data ?? []).map((row) => [String(row.translation_key), String(row.value)])));
+        if (!request.signal.aborted && !error) setTranslations(data as Record<string, string>);
       });
-
-    return () => {
-      active = false;
-    };
+    return () => request.abort();
   }, [language, translationRevision]);
 
   const value = useMemo<LanguageContextValue>(

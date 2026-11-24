@@ -9,7 +9,7 @@ export default {
         surface: '#FFFDF8',
         ink: {
           DEFAULT: '#292B28',
-          muted: '#77766F',
+          muted: '#62615B',
         },
         forest: {
           DEFAULT: '#243D35',
@@ -29,7 +29,9 @@ export default {
           200: '#D4BC8C',
           300: '#C0A261',
           400: '#A47D50',
-          500: '#8E6A42',
+          500: '#775533',
+          600: '#684B2F',
+          700: '#573E27',
         },
         line: '#DED9CE',
         success: '#47785B',

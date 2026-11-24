@@ -4,11 +4,11 @@ import { useContent } from '@/context/ContentContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { loadSiteTranslations } from '@/lib/translations';
 import { uiTranslationCatalog } from '@/data/uiTranslationCatalog';
 import { psychologyTranslationCatalog } from '@/components/PsychologyCarousel';
 
 type LanguageRow = { code: string; name_en: string; name_native: string; is_enabled: boolean; sort_order: number };
-type StoredTranslation = { translation_key: string; value: string };
 type TranslationEntry = { key: string; group: string; label: string; english: string; bengali: string };
 type FinalQuestion = { id: string; question_en: string; question_bn: string; options_en: string[]; options_bn: string[]; explanation_en: string; explanation_bn: string };
 
@@ -91,16 +91,19 @@ export default function AdminLanguagesPage() {
       setDrafts({});
       return;
     }
-    let active = true;
-    void supabase.from('site_translations').select('translation_key,value').eq('language_code', selectedCode)
-      .then(({ data, error: loadError }) => {
-        if (!active) return;
-        if (loadError) { setError(loadError.message); return; }
-        const values = Object.fromEntries(((data ?? []) as StoredTranslation[]).map((row) => [row.translation_key, row.value]));
+    const request = new AbortController();
+    setStored({});
+    setDrafts({});
+    void loadSiteTranslations(selectedCode, request.signal)
+      .then((values) => {
+        if (request.signal.aborted) return;
         setStored(values);
         setDrafts(values);
+      })
+      .catch((loadError: { message: string }) => {
+        if (!request.signal.aborted) setError(loadError.message);
       });
-    return () => { active = false; };
+    return () => request.abort();
   }, [selectedCode]);
 
   const entries = useMemo(() => buildEntries(laws, categories, finalQuestions), [laws, categories, finalQuestions]);

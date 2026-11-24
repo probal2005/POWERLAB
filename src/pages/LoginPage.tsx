@@ -17,11 +17,17 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && user && profile) {
-      navigate(profile.role === 'admin' ? '/admin' : '/student', {
-        replace: true,
-      });
+      const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+      const path = from?.pathname ?? '';
+      const destination = profile.role === 'admin' ? '/admin' : '/student';
+      const allowed = path === destination ||
+        (profile.role === 'admin' && path.startsWith('/admin/')) ||
+        (profile.role === 'student' && (
+          path === '/certification' || /^\/assessment\/[a-z0-9-]+$/.test(path)
+        ));
+      navigate(allowed ? { pathname: path, search: from?.search ?? '' } : destination, { replace: true });
     }
-  }, [loading, user, profile, navigate]);
+  }, [loading, user, profile, navigate, location.state]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,25 +46,6 @@ export default function LoginPage() {
         return;
       }
 
-      const state = location.state as
-        | { from?: { pathname?: string } }
-        | null;
-
-      const requestedPath = state?.from?.pathname;
-      const defaultDestination =
-        result.role === 'admin' ? '/admin' : '/student';
-
-      const allowedPrefix =
-        result.role === 'admin' ? '/admin' : '/student';
-
-      const destination =
-        requestedPath &&
-        (requestedPath === allowedPrefix ||
-          requestedPath.startsWith(`${allowedPrefix}/`))
-          ? requestedPath
-          : defaultDestination;
-
-      navigate(destination, { replace: true });
     } catch {
       setError(
         t(

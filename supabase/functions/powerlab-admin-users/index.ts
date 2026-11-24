@@ -1,5 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,22 +34,17 @@ Deno.serve(async (request) => {
   const publishableKey = Deno.env.get("SUPABASE_ANON_KEY")
     ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY")
     ?? defaultKey("SUPABASE_PUBLISHABLE_KEYS");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-    ?? defaultKey("SUPABASE_SECRET_KEYS");
-  if (!token || !url || !publishableKey || !serviceRoleKey) {
-    return response(401, { error: "Authentication required." });
-  }
+  if (!token) return response(401, { error: "Authentication required." });
+  if (!url || !publishableKey) return response(503, { error: "Account management is unavailable." });
 
-  const authClient = createClient(url, publishableKey, {
+  const callerClient = createClient(url, publishableKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: authData, error: authError } = await authClient.auth.getUser(token);
+  const { data: authData, error: authError } = await callerClient.auth.getUser(token);
   if (authError || !authData.user) return response(401, { error: "Invalid session." });
 
-  const adminClient = createClient(url, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: caller, error: callerError } = await adminClient
+  const { data: caller, error: callerError } = await callerClient
     .from("profiles")
     .select("role")
     .eq("id", authData.user.id)
@@ -60,6 +54,7 @@ Deno.serve(async (request) => {
   let body: { action?: unknown; userId?: unknown; role?: unknown; offset?: unknown };
   try {
     body = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) return response(400, { error: "Invalid request body." });
   } catch {
     return response(400, { error: "Invalid request body." });
   }
@@ -67,10 +62,11 @@ Deno.serve(async (request) => {
   if (body.action === "list") {
     const requestedOffset = typeof body.offset === "number" ? body.offset : 0;
     const offset = Number.isInteger(requestedOffset) ? Math.max(0, Math.min(requestedOffset, 1000000)) : 0;
-    const { data, count, error } = await adminClient
+    const { data, count, error } = await callerClient
       .from("profiles")
       .select("id,email,full_name,role,created_at", { count: "exact" })
       .order("created_at", { ascending: false })
+      .order("id")
       .range(offset, offset + 99);
     if (error) return response(500, { error: "Could not load user accounts." });
     return response(200, { users: data ?? [], total: count ?? 0, offset });
@@ -85,23 +81,12 @@ Deno.serve(async (request) => {
     if (userId === authData.user.id) return response(400, { error: "You cannot change your own administrator role." });
     if (role !== "student" && role !== "admin") return response(400, { error: "Select a valid account role." });
 
-    const { data: target, error: targetError } = await adminClient
-      .from("profiles")
-      .select("id,role")
-      .eq("id", userId)
-      .maybeSingle();
-    if (targetError || !target) return response(404, { error: "Account not found." });
-
-    if (target.role === "admin" && role === "student") {
-      const { count, error: countError } = await adminClient
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("role", "admin");
-      if (countError) return response(500, { error: "Could not verify administrator accounts." });
-      if ((count ?? 0) <= 1) return response(409, { error: "The last administrator cannot be demoted." });
-    }
-
-    const { error } = await adminClient.from("profiles").update({ role }).eq("id", userId);
+    const { error } = await callerClient.rpc("set_powerlab_user_role", {
+      p_user_id: userId,
+      p_role: role,
+    });
+    if (error?.code === "42501") return response(403, { error: "Administrator permission required." });
+    if (error?.code === "P0002") return response(404, { error: "Account not found." });
     if (error) return response(500, { error: "Could not update the account role." });
     return response(200, { success: true });
   }

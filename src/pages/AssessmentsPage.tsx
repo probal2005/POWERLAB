@@ -11,7 +11,7 @@ export default function AssessmentsPage() {
     .sort((a, b) => a.number - b.number);
 
   return (
-    <main className="container-content min-h-[70vh] py-12 md:py-16">
+    <section className="container-content min-h-[70vh] py-12 md:py-16">
       <header className="border-b border-line pb-8">
         <p className="eyebrow text-bronze-600">POWERLAB</p>
         <h1 className="mt-3 font-display text-3xl text-ink sm:text-4xl">{t('Assessments', 'মূল্যায়ন')}</h1>
@@ -66,6 +66,6 @@ export default function AssessmentsPage() {
           </ul>
         )}
       </section>
-    </main>
+    </section>
   );
 }

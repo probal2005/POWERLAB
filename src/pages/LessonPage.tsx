@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams, Navigate } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -35,8 +35,8 @@ const WIDTH_MAP: Record<ReadWidth, string> = {
 export default function LessonPage() {
   const { slug } = useParams<{ slug: string }>();
   const { language, languages, setLanguage, t, tx } = useLanguage();
-  const { laws, categories, loading } = useContent();
-  const { user } = useAuth();
+  const { laws, categories, loading, error } = useContent();
+  const { user, loading: authLoading } = useAuth();
 
   const law = useMemo(
     () => laws.find((item) => item.slug === slug && item.isPublished !== false),
@@ -47,6 +47,9 @@ export default function LessonPage() {
   const [fontSize, setFontSize] = useState<FontSize>('md');
   const [readWidth, setReadWidth] = useState<ReadWidth>('normal');
   const [bookmarked, setBookmarked] = useState(false);
+  const [savingBookmark, setSavingBookmark] = useState(false);
+  const [savingProgress, setSavingProgress] = useState(false);
+  const [restoring, setRestoring] = useState(true);
   const [completed, setCompleted] = useState(false);
   const [learningNotice, setLearningNotice] = useState('');
   const [tocOpen, setTocOpen] = useState(false);
@@ -64,16 +67,24 @@ export default function LessonPage() {
 
   // Restore learning state from the account when signed in, with local fallback for guests.
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || authLoading) return;
+    let active = true;
+    setRestoring(true);
+    setBookmarked(false);
+    setCompleted(false);
+    setLearningNotice('');
     if (user) {
       void Promise.all([
         supabase.from('student_bookmarks').select('law_slug').eq('user_id', user.id).eq('law_slug', slug).maybeSingle(),
         supabase.from('student_law_progress').select('status').eq('user_id', user.id).eq('law_slug', slug).maybeSingle(),
       ]).then(([bookmark, progress]) => {
+        if (!active) return;
+        setRestoring(false);
+        if (bookmark.error || progress.error) setLearningNotice('Your saved lesson state could not be loaded.');
         if (!bookmark.error) setBookmarked(Boolean(bookmark.data));
         if (!progress.error) setCompleted(progress.data?.status === 'completed');
       });
-      return;
+      return () => { active = false; };
     }
     try {
       const bm = JSON.parse(localStorage.getItem('powerlab:bookmarks') || '[]');
@@ -82,8 +93,10 @@ export default function LessonPage() {
       setCompleted(cmp.includes(slug));
     } catch {
       /* ignore */
+    } finally {
+      setRestoring(false);
     }
-  }, [slug, user]);
+  }, [slug, user, authLoading]);
 
   const persistBookmark = async (next: boolean): Promise<boolean> => {
     if (!slug) return false;
@@ -122,13 +135,13 @@ export default function LessonPage() {
   };
 
   useEffect(() => {
-    if (!slug || !user) return;
+    if (!law || !slug || !user) return;
     void supabase.from('student_law_progress').upsert({
       user_id: user.id, law_slug: slug, last_viewed_at: new Date().toISOString(),
     }, { onConflict: 'user_id,law_slug' }).then(({ error }) => {
       if (error) setLearningNotice('Your recent lesson activity could not be saved.');
     });
-  }, [slug, user]);
+  }, [law, slug, user]);
 
   // Scroll-spy for active TOC highlight
   useEffect(() => {
@@ -162,7 +175,10 @@ export default function LessonPage() {
   }
 
   if (!law) {
-    return <Navigate to="/laws" replace />;
+    return <section className="container-content py-20">
+      <h1 className="font-display text-3xl">{error ? t('Lesson unavailable', 'পাঠটি এখন পাওয়া যাচ্ছে না') : t('Lesson not found', 'পাঠ পাওয়া যায়নি')}</h1>
+      <Link className="btn-primary mt-5" to="/laws">{t('Browse laws', 'নিয়মগুলো দেখুন')}</Link>
+    </section>;
   }
 
   const publishedLaws = laws.filter((item) => item.isPublished !== false);
@@ -178,12 +194,14 @@ export default function LessonPage() {
   const toggleBookmark = () => {
     const next = !bookmarked;
     setLearningNotice('');
-    void persistBookmark(next).then((saved) => { if (saved) setBookmarked(next); });
+    setSavingBookmark(true);
+    void persistBookmark(next).then((saved) => { if (saved) setBookmarked(next); }).finally(() => setSavingBookmark(false));
   };
   const toggleCompleted = () => {
     const next = !completed;
     setLearningNotice('');
-    void persistCompleted(next).then((saved) => { if (saved) setCompleted(next); });
+    setSavingProgress(true);
+    void persistCompleted(next).then((saved) => { if (saved) setCompleted(next); }).finally(() => setSavingProgress(false));
   };
 
   const scrollToSection = (i: number) => {
@@ -239,8 +257,9 @@ export default function LessonPage() {
             <div className="flex items-center gap-1.5">
               <button
                 onClick={toggleBookmark}
-                className={`btn-ghost px-2.5 ${bookmarked ? 'text-forest-600' : ''}`}
+                disabled={authLoading || restoring || savingBookmark}
                 aria-pressed={bookmarked}
+                className={`btn-ghost px-2.5 ${bookmarked ? 'text-forest-600' : ''}`}
                 title={t('Bookmark', 'বুকমার্ক')}
               >
                 {bookmarked ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
@@ -248,8 +267,9 @@ export default function LessonPage() {
               </button>
               <button
                 onClick={toggleCompleted}
-                className={`btn-ghost px-2.5 ${completed ? 'text-success' : ''}`}
+                disabled={authLoading || restoring || savingProgress}
                 aria-pressed={completed}
+                className={`btn-ghost px-2.5 ${completed ? 'text-success' : ''}`}
                 title={t('Mark as completed', 'সম্পূর্ণ হিসেবে চিহ্নিত')}
               >
                 <Check className="h-4 w-4" />

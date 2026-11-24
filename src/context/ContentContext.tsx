@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Category, Law, LawSection } from '@/types/law';
 import { supabase } from '@/lib/supabase';
 
@@ -12,16 +12,15 @@ type ContentContextValue = {
   updateLaw: (slug: string, updates: Partial<Law>) => Promise<void>;
   swapLawNumbers: (firstSlug: string, secondSlug: string) => Promise<void>;
   deleteLaw: (slug: string) => Promise<void>;
-  reorderLaws: (orderedSlugs: string[]) => Promise<void>;
   addCategory: (category: Category) => Promise<void>;
   updateCategory: (id: string, updates: Partial<Category>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
-  resetContent: () => Promise<void>;
+  refresh: () => Promise<boolean>;
 };
 
 const ContentContext = createContext<ContentContextValue | undefined>(undefined);
 type ContentPayload = { laws: Law[]; categories: Category[] };
-const CONTENT_CACHE_KEY = 'powerlab:shared-content:v2';
+const CONTENT_CACHE_KEY = 'powerlab:shared-content:v3';
 
 function readCachedContent(): ContentPayload | null {
   try {
@@ -54,18 +53,23 @@ function toDatabase(law: Law) {
   };
 }
 
-export function ContentProvider({ children }: { children: ReactNode }) {
+export function ContentProvider({ children, admin = false }: { children: ReactNode; admin?: boolean }) {
+  const refreshPublic = useContext(ContentContext)?.refresh;
   const [content, setContent] = useState<ContentPayload>(() => {
-    const cached = readCachedContent();
+    const cached = admin ? null : readCachedContent();
     return cached ?? { laws: [], categories: [] };
   });
-  const [loading, setLoading] = useState(() => readCachedContent() === null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const requestId = useRef(0);
+
   const refresh = useCallback(async () => {
-    const hasCachedContent = readCachedContent() !== null;
+    const id = ++requestId.current;
+    const hasCachedContent = !admin && readCachedContent() !== null;
     if (!hasCachedContent) setLoading(true);
-    const { data, error: loadError } = await supabase.rpc('get_powerlab_content');
+    const { data, error: loadError } = await supabase.rpc(admin ? 'get_powerlab_admin_content' : 'get_powerlab_public_content');
+    if (id !== requestId.current) return true;
     if (loadError) {
       setError(`Could not load shared POWERLAB content: ${loadError.message}`);
       setLoading(false);
@@ -79,14 +83,22 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       })),
     };
     setContent(nextContent);
-    try { localStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), content: nextContent })); } catch { /* storage can be disabled or full */ }
+    try { if (!admin) localStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), content: nextContent })); } catch { /* storage can be disabled or full */ }
     setError(null);
     setLoading(false);
     return true;
-  }, []);
+  }, [admin]);
 
   // Published content is shared across roles, so auth changes must not refetch it.
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    try { localStorage.removeItem('powerlab:shared-content:v2'); } catch { /* storage can be disabled */ }
+  }, []);
+
+  useEffect(() => {
+    const requests = requestId;
+    void refresh();
+    return () => { ++requests.current; };
+  }, [refresh]);
 
   const commit = useCallback(async (operation: () => PromiseLike<{ error: { message: string } | null }>) => {
     const result = await operation();
@@ -94,10 +106,11 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       setError(`Could not save shared content: ${result.error.message}`);
       throw new Error(result.error.message);
     }
+    if (admin) void refreshPublic?.();
     if (!await refresh()) {
       throw new Error('The change was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
     }
-  }, [refresh]);
+  }, [admin, refresh, refreshPublic]);
 
   const addLaw = useCallback((law: Law) => commit(() => supabase.from('content_laws').insert(toDatabase(law))), [commit]);
   const updateLaw = useCallback((slug: string, updates: Partial<Law>) => {
@@ -105,50 +118,10 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     if (!current) return Promise.reject(new Error('Law not found'));
     return commit(() => supabase.from('content_laws').update(toDatabase({ ...current, ...updates })).eq('slug', slug));
   }, [commit, content.laws]);
-  const swapLawNumbers = useCallback(async (firstSlug: string, secondSlug: string) => {
-    const first = content.laws.find((law) => law.slug === firstSlug);
-    const second = content.laws.find((law) => law.slug === secondSlug);
-    if (!first || !second) throw new Error('Could not find both laws to reorder.');
-
-    const results = await Promise.all([
-      supabase.from('content_laws').update({ number: second.number, sort_order: second.number }).eq('slug', first.slug),
-      supabase.from('content_laws').update({ number: first.number, sort_order: first.number }).eq('slug', second.slug),
-    ]);
-    const updateError = results.find((result) => result.error)?.error;
-    if (updateError) {
-      setError(`Could not reorder shared content: ${updateError.message}`);
-      await refresh();
-      throw new Error(updateError.message);
-    }
-    if (!await refresh()) {
-      throw new Error('The order was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
-    }
-  }, [content.laws, refresh]);
+  const swapLawNumbers = useCallback((firstSlug: string, secondSlug: string) => commit(() =>
+    supabase.rpc('swap_powerlab_law_numbers', { p_first: firstSlug, p_second: secondSlug })
+  ), [commit]);
   const deleteLaw = useCallback((slug: string) => commit(() => supabase.from('content_laws').delete().eq('slug', slug)), [commit]);
-  const reorderLaws = useCallback(async (slugs: string[]) => {
-    const current = new Map(content.laws.map((law) => [law.slug, law]));
-    const updates = slugs.flatMap((slug, index) => {
-      const law = current.get(slug);
-      return law ? [{ slug: law.slug, sortOrder: index + 1 }] : [];
-    });
-
-    // Avoid reloading the complete 48-law payload after every row update.
-    for (let start = 0; start < updates.length; start += 8) {
-      const batch = updates.slice(start, start + 8);
-      const results = await Promise.all(batch.map(({ slug, sortOrder }) =>
-        supabase.from('content_laws').update({ sort_order: sortOrder }).eq('slug', slug)
-      ));
-      const updateError = results.find((result) => result.error)?.error;
-      if (updateError) {
-        setError(`Could not reorder shared content: ${updateError.message}`);
-        await refresh();
-        throw new Error(updateError.message);
-      }
-    }
-    if (!await refresh()) {
-      throw new Error('The order was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
-    }
-  }, [content.laws, refresh]);
   const addCategory = useCallback((category: Category) => commit(() => supabase.from('content_categories').insert({ id: category.id, label_en: category.labelEn, label_bn: category.labelBn })), [commit]);
   const updateCategory = useCallback((id: string, updates: Partial<Category>) => {
     const current = content.categories.find((category) => category.id === id);
@@ -157,12 +130,8 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     return commit(() => supabase.from('content_categories').update({ label_en: category.labelEn, label_bn: category.labelBn }).eq('id', id));
   }, [commit, content.categories]);
   const deleteCategory = useCallback((id: string) => commit(() => supabase.from('content_categories').delete().eq('id', id)), [commit]);
-  const resetContent = useCallback(async () => {
-    throw new Error('Resetting shared content is disabled to protect existing edits.');
-  }, []);
-
   const getSections = useCallback((slug: string) => content.laws.find((law) => law.slug === slug)?.sections, [content.laws]);
-  const value = useMemo(() => ({ ...content, loading, error, getSections, addLaw, updateLaw, swapLawNumbers, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent }), [content, loading, error, getSections, addLaw, updateLaw, swapLawNumbers, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent]);
+  const value = useMemo(() => ({ ...content, loading, error, getSections, addLaw, updateLaw, swapLawNumbers, deleteLaw, addCategory, updateCategory, deleteCategory, refresh }), [content, loading, error, getSections, addLaw, updateLaw, swapLawNumbers, deleteLaw, addCategory, updateCategory, deleteCategory, refresh]);
   return <ContentContext.Provider value={value}>{children}</ContentContext.Provider>;
 }
 

@@ -74,8 +74,8 @@ export default function Navbar() {
             <button
               onClick={() => setLangOpen((o) => !o)}
               className="btn-ghost px-3 py-2"
-              aria-haspopup="listbox"
               aria-expanded={langOpen}
+              onKeyDown={(event) => { if (event.key === 'Escape') setLangOpen(false); }}
               aria-label="Select language"
             >
               <Languages className="h-4 w-4" />
@@ -85,11 +85,12 @@ export default function Navbar() {
             {langOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setLangOpen(false)} />
-                <div className="absolute right-0 mt-2 w-36 z-50 surface-card shadow-soft overflow-hidden">
+                <div className="absolute right-0 mt-2 w-44 z-50 surface-card shadow-soft max-h-[60vh] overflow-auto">
                   {languages.map((item) => (
                     <button
                       key={item.code}
                       lang={item.code}
+                      aria-pressed={language === item.code}
                       onClick={() => { setLanguage(item.code); setLangOpen(false); }}
                       className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-canvas-2 ${
                         item.code === 'bn' ? 'font-bengali' : ''

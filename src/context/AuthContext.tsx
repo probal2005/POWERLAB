@@ -121,7 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loadProfile]);
 
   useEffect(() => {
+    const requests = profileRequestId;
     let active = true;
+    let profileTimer: ReturnType<typeof setTimeout> | undefined;
 
     const {
       data: { subscription },
@@ -129,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (_event, session: Session | null) => {
         if (!active) return;
 
+        clearTimeout(profileTimer);
         const requestId = ++profileRequestId.current;
         const currentUser = session?.user ?? null;
 
@@ -155,21 +158,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(true);
 
         // Defer the profile query until after the auth callback completes.
-        void Promise.resolve()
-          .then(() => loadProfile(currentUser.id, requestId))
-          .catch(() => {
-            // The detailed error is stored in profileError.
-          })
-          .finally(() => {
-            if (active && requestId === profileRequestId.current) {
-              setLoading(false);
-            }
-          });
+        profileTimer = setTimeout(() => {
+          if (requestId !== profileRequestId.current) return;
+          void loadProfile(currentUser.id, requestId)
+            .catch(() => {
+              // The detailed error is stored in profileError.
+            })
+            .finally(() => {
+              if (active && requestId === profileRequestId.current) {
+                setLoading(false);
+              }
+            });
+        }, 0);
       }
     );
 
     return () => {
       active = false;
+      clearTimeout(profileTimer);
+      ++requests.current;
       subscription.unsubscribe();
     };
   }, [loadProfile]);
@@ -216,11 +223,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (requestId === profileRequestId.current) {
           setProfile(null);
           setProfileError(message);
+          profileLoadedForUserId.current = null;
+          setLoading(false);
+          await supabase.auth.signOut();
         }
-
-        profileLoadedForUserId.current = null;
-        setLoading(false);
-        await supabase.auth.signOut();
 
         return { error: message, role: null };
       }
@@ -249,8 +255,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    ++profileRequestId.current;
-
     const { error } = await supabase.auth.signOut();
     return { error: error?.message ?? null };
   }, []);

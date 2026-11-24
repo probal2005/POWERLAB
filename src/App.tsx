@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import ScrollToTop from '@/components/ScrollToTop';
+import DocumentMetadata from '@/components/DocumentMetadata';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { ContentProvider } from '@/context/ContentContext';
 import { AuthProvider } from '@/context/AuthContext';
@@ -43,7 +44,7 @@ const AdminLawsPage = lazy(
 
 function PageFallback() {
   return (
-    <div className="container-content flex items-center justify-center py-32">
+    <div role="status" aria-label="Loading page" className="container-content flex items-center justify-center py-32">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-forest-300 border-t-forest-600" />
     </div>
   );
@@ -64,6 +65,7 @@ export default function App() {
         <LanguageProvider>
           <BrowserRouter>
             <ScrollToTop />
+            <DocumentMetadata />
             <Suspense fallback={<PageFallback />}>
               <Routes>
                 <Route element={<PublicLayout />}>
@@ -95,7 +97,7 @@ export default function App() {
                 </Route>
 
                 <Route element={<ProtectedRoute requiredRole="admin" />}>
-                  <Route path="/admin" element={<AdminLayout />}>
+                  <Route path="/admin" element={<ContentProvider admin><AdminLayout /></ContentProvider>}>
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="laws" element={<AdminLawsPage />} />
                     <Route path="certification" element={<AdminCertificationPage />} />

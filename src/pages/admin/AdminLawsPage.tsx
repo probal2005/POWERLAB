@@ -811,6 +811,7 @@ export default function AdminLawsPage() {
                     URL slug
                     <input
                       value={editor.slug}
+                      readOnly={Boolean(editor.originalSlug)}
                       onChange={(event) =>
                         updateEditor('slug', event.target.value)
                       }
