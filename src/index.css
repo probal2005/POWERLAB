@@ -319,6 +319,32 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 12mm 20mm;
+    padding: 9mm 17mm;
+  }
+
+  .certificate-modern-logos img {
+    width: 36mm;
+    height: 14mm;
+  }
+
+  .certificate-modern-title {
+    margin-top: 4mm;
+    font-size: 22pt;
+  }
+
+  .certificate-modern-recipient {
+    margin-top: 4mm;
+    font-size: 28pt;
+  }
+
+  .certificate-modern-qualification {
+    margin-top: 2.5mm;
+    font-size: 11pt;
+  }
+
+  .certificate-modern-details {
+    margin-top: 5mm;
+    padding-top: 2mm;
+    font-size: 9pt;
   }
 }
