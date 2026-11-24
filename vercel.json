@@ -2,7 +2,19 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/(laws|about|assessments|verify-certificate|login|register|forgot-password|reset-password|student|certification|admin)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(laws|assessment)/:slug",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/student/review",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/(laws|certification|languages|categories|assessments|users|settings)",
       "destination": "/index.html"
     }
   ],

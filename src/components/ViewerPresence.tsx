@@ -37,6 +37,8 @@ export function TrackViewerPresence() {
           p_visible_ms: elapsed <= 35000 ? elapsed : 0,
         }).abortSignal(controller.signal);
         if (epoch === visibilityEpoch) previousSample = error ? null : now;
+      } catch {
+        if (epoch === visibilityEpoch) previousSample = null;
       } finally {
         inFlight = false;
         if (epoch !== visibilityEpoch) void ping();
@@ -70,10 +72,14 @@ export function TrackViewerPresence() {
       if (document.hidden) finishVisibleSample();
       else resume();
     };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) resume();
+    };
     void ping();
     const timer = window.setInterval(ping, 20000);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', finishVisibleSample);
+    window.addEventListener('pageshow', onPageShow);
     window.addEventListener('online', resume);
     window.addEventListener('offline', finishVisibleSample);
     return () => {
@@ -82,6 +88,7 @@ export function TrackViewerPresence() {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', finishVisibleSample);
+      window.removeEventListener('pageshow', onPageShow);
       window.removeEventListener('online', resume);
       window.removeEventListener('offline', finishVisibleSample);
     };
