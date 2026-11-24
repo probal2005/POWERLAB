@@ -1,5 +1,7 @@
+import LessonNotes from '@/components/LessonNotes';
+import { savePosition } from '@/lib/readingPosition';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -43,6 +45,10 @@ export default function LessonPage() {
     [laws, slug]
   );
   const sections = law?.sections;
+  const [searchParams] = useSearchParams();
+  const requestedSection = searchParams.get('section');
+  const resumeKey = useRef('');
+  const userId = user?.id;
 
   const [fontSize, setFontSize] = useState<FontSize>('md');
   const [readWidth, setReadWidth] = useState<ReadWidth>('normal');
@@ -56,6 +62,20 @@ export default function LessonPage() {
 
   const sectionRefs = useRef<Record<number, HTMLElement | null>>({});
   const [activeSection, setActiveSection] = useState(0);
+
+  useEffect(() => {
+    if (!slug || !sections?.length || requestedSection === null) return;
+    const index = Number(requestedSection);
+    const key = `${slug}:${index}`;
+    if (!Number.isInteger(index) || index < 0 || index >= sections.length || resumeKey.current === key) return;
+    resumeKey.current = key;
+    const frame = requestAnimationFrame(() => {
+      sectionRefs.current[index]?.scrollIntoView({ block: 'start' });
+      setActiveSection(index);
+      if (userId) savePosition(userId, { slug, section: index });
+    });
+    return () => { cancelAnimationFrame(frame); resumeKey.current = ''; };
+  }, [requestedSection, sections?.length, slug, userId]);
 
   // Reset state on law change
   useEffect(() => {
@@ -151,9 +171,10 @@ export default function LessonPage() {
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) {
+        if (visible[0] && slug) {
           const idx = Number((visible[0].target as HTMLElement).dataset.idx);
           setActiveSection(idx);
+          if (userId) savePosition(userId, { slug, section: idx });
         }
       },
       { rootMargin: '-80px 0px -70% 0px', threshold: 0 }
@@ -163,7 +184,7 @@ export default function LessonPage() {
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
-  }, [sections]);
+  }, [sections, slug, userId]);
 
   if (!law && loading) {
     return (
@@ -419,6 +440,8 @@ export default function LessonPage() {
                   </section>
                 </div>
               )}
+
+              {user && <LessonNotes key={`${user.id}:${law.slug}`} userId={user.id} slug={law.slug} />}
 
               {/* Assessment CTA */}
               <div className="mt-12 surface-card p-6 md:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

@@ -70,6 +70,16 @@ begin
   result := public.submit_law_assessment('never-outshine-the-master', '[0,0,0]');
   assert not (result->>'passed')::boolean and (result->>'percentage')::int = 33;
   assert (select count(*) from public.student_assessment_attempts) = 2;
+  assert (select count(*) from public.get_powerlab_missed_questions()) = 2;
+  insert into public.student_lesson_notes (user_id, law_slug, note)
+  values (auth.uid(), 'never-outshine-the-master', 'Private audit note');
+  assert (select count(*) from public.student_lesson_notes) = 1;
+  begin
+    perform public.get_powerlab_assessment_analytics();
+    raise exception 'Student could read admin analytics';
+  exception when insufficient_privilege then null;
+  end;
+
   begin
     perform public.submit_law_assessment('never-outshine-the-master', null);
     raise exception 'Null answers were accepted';
@@ -82,6 +92,9 @@ $$;
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000002', true);
 do $$
 begin
+  assert not exists (select 1 from public.student_lesson_notes);
+  assert jsonb_array_length(public.get_powerlab_assessment_analytics()->'laws') = 48;
+  assert jsonb_array_length(public.get_powerlab_assessment_analytics()->'questions') = 2;
   assert jsonb_path_exists(public.get_powerlab_admin_content(), '$.laws[*].assessment.questions[*].correctOption');
   assert not jsonb_path_exists(public.get_powerlab_public_content(), '$.laws[*].assessment.questions[*].correctOption');
   perform public.swap_powerlab_law_numbers('never-outshine-the-master', 'assume-formlessness');

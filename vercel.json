@@ -36,7 +36,7 @@
       ]
     },
     {
-      "source": "/student",
+      "source": "/student/:path*",
       "headers": [
         {
           "key": "X-Robots-Tag",

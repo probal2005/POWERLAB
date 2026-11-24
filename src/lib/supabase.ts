@@ -13,3 +13,11 @@ export const supabase = createClient(
   supabaseUrl,
   supabasePublishableKey
 );
+
+let recoverySession = false;
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY' && session) recoverySession = true;
+  if (event === 'SIGNED_OUT' || event === 'SIGNED_IN') recoverySession = false;
+});
+
+export const hasPasswordRecoverySession = () => recoverySession;

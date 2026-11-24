@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import AssessmentAnalytics from '@/components/admin/AssessmentAnalytics';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Construction, Plus, Save, Search, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import { useContent } from '@/context/ContentContext';
 import { supabase } from '@/lib/supabase';
 import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
@@ -173,6 +175,7 @@ function AssessmentManager() {
         <h1 className="mt-3 font-display text-3xl tracking-tight text-ink sm:text-4xl">Assessments</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">Review each law assessment, edit its bilingual questions and explanations, and publish it when the question bank is complete.</p>
       </div>
+      <AssessmentAnalytics />
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
       {loading ? <p className="text-sm text-ink-muted">Loading assessments…</p> : <>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -202,6 +205,8 @@ function Metric({ label, value }: { label: string; value: number }) {
 type ManagedUser = { id: string; email: string | null; full_name: string; role: 'student' | 'admin'; created_at: string };
 
 function UserManager() {
+  const { user: signedInUser } = useAuth();
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [totalUsers, setTotalUsers] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -212,27 +217,40 @@ function UserManager() {
   const [message, setMessage] = useState('');
 
   const pageSize = 100;
-  const loadUsers = useCallback(async (nextOffset: number) => {
-    setLoading(true);
+  const latestRequest = useRef(0);
+  const loadUsers = useCallback(async (nextOffset: number, background = false) => {
+    const request = ++latestRequest.current;
+    if (!background) setLoading(true);
     setError('');
     const { data, error: requestError } = await supabase.functions.invoke('powerlab-admin-users', { body: { action: 'list', offset: nextOffset } });
+    if (request !== latestRequest.current) return;
     if (requestError) {
       setError(requestError.message || 'Could not load user accounts.');
-      setUsers([]);
+      if (!background) setUsers([]);
     } else {
       setUsers((data?.users ?? []) as ManagedUser[]);
       setTotalUsers(Number(data?.total ?? 0));
       setOffset(nextOffset);
+      setLastSync(new Date());
     }
     setLoading(false);
   }, []);
 
   useEffect(() => { void loadUsers(0); }, [loadUsers]);
 
+  useEffect(() => {
+    if (loading || savingId) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void loadUsers(offset, true);
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [loadUsers, loading, offset, savingId]);
+
   async function changeRole(user: ManagedUser, role: ManagedUser['role']) {
     if (user.role === role) return;
     const action = role === 'admin' ? 'promote to administrator' : 'change to student';
     if (!window.confirm(`Are you sure you want to ${action} ${user.email || user.full_name || 'this account'}?`)) return;
+    ++latestRequest.current;
     setSavingId(user.id);
     setError('');
     setMessage('');
@@ -257,13 +275,14 @@ function UserManager() {
       <label className="relative block w-full sm:max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" /><input className="field-input pl-9" aria-label="Search this page of users" placeholder="Search this page" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       <div className="flex items-center gap-3"><p className="text-sm text-ink-muted">{totalUsers} accounts · {totalUsers ? `${offset + 1}–${Math.min(offset + users.length, totalUsers)}` : '0'}</p><button type="button" className="btn-secondary" disabled={loading} onClick={() => void loadUsers(offset)}>Refresh</button></div>
     </div>
+    {lastSync && <p className="text-xs text-ink-muted">Account data refreshes every 15 seconds while open. Last synced <time dateTime={lastSync.toISOString()}>{lastSync.toLocaleTimeString()}</time>.</p>}
     {(error || message) && <p role={error ? 'alert' : 'status'} className={`border p-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || message}</p>}
     <div className="divide-y divide-line border border-line bg-surface">
       {loading ? <p className="p-6 text-sm text-ink-muted">Loading accounts…</p> : filtered.length === 0 ? <p className="p-6 text-sm text-ink-muted">{users.length ? 'No accounts match your search.' : 'No user accounts were found.'}</p> : filtered.map((user) => <article key={user.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-canvas-2 text-forest-700"><UserRound size={18} /></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink">{user.full_name || 'Name not provided'}</p><p className="mt-1 break-all text-xs text-ink-muted">{user.email || 'Email unavailable'}</p><p className="mt-1 text-[11px] text-ink-muted">Joined {new Date(user.created_at).toLocaleDateString()}</p></div></div>
-        <label className="flex items-center gap-3 text-xs text-ink-muted">Role<select className="field-input w-auto" aria-label={`Role for ${user.email || user.full_name}`} value={user.role} disabled={savingId === user.id} onChange={(event) => void changeRole(user, event.target.value as ManagedUser['role'])}><option value="student">Student</option><option value="admin">Administrator</option></select>{savingId === user.id && <span>Saving…</span>}</label>
+        <label className="flex items-center gap-3 text-xs text-ink-muted">Role<select className="field-input w-auto" aria-label={`Role for ${user.email || user.full_name}`} value={user.role} disabled={Boolean(savingId) || user.id === signedInUser?.id} onChange={(event) => void changeRole(user, event.target.value as ManagedUser['role'])}><option value="student">Student</option><option value="admin">Administrator</option></select>{savingId === user.id && <span>Saving…</span>}</label>
       </article>)}
     </div>
-    <div className="flex items-center justify-between gap-4"><p className="text-xs text-ink-muted">Page {Math.floor(offset / pageSize) + 1} of {Math.max(1, Math.ceil(totalUsers / pageSize))}</p><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={loading || offset === 0} onClick={() => void loadUsers(Math.max(0, offset - pageSize))}><ChevronLeft size={15} /> Previous</button><button type="button" className="btn-secondary" disabled={loading || offset + pageSize >= totalUsers} onClick={() => void loadUsers(offset + pageSize)}>Next <ChevronRight size={15} /></button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-4"><p className="text-xs text-ink-muted">Page {Math.floor(offset / pageSize) + 1} of {Math.max(1, Math.ceil(totalUsers / pageSize))}</p><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={loading || offset === 0} onClick={() => void loadUsers(Math.max(0, offset - pageSize))}><ChevronLeft size={15} /> Previous</button><button type="button" className="btn-secondary" disabled={loading || offset + pageSize >= totalUsers} onClick={() => void loadUsers(offset + pageSize)}>Next <ChevronRight size={15} /></button></div></div>
   </div>;
 }

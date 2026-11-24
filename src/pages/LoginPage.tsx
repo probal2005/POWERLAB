@@ -123,9 +123,9 @@ export default function LoginPage() {
             </div>
 
             <div className="flex justify-end">
-              <span className="text-xs text-ink-muted">
-                {t('Password recovery will be available soon.', 'পাসওয়ার্ড পুনরুদ্ধার সুবিধা শীঘ্রই আসছে।')}
-              </span>
+              <Link className="text-sm text-forest-700 underline" to="/forgot-password">
+                {t('Forgot password?', 'পাসওয়ার্ড ভুলে গেছেন?')}
+              </Link>
             </div>
 
             <button

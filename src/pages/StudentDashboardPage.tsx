@@ -1,3 +1,4 @@
+import { readPosition } from '@/lib/readingPosition';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -30,32 +31,51 @@ export default function StudentDashboardPage() {
   const [bookmarks, setBookmarks] = useState<string[]>([]);
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
   const [learningError, setLearningError] = useState('');
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [learningLoading, setLearningLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     if (!user) return;
-    setLearningLoading(true);
-    setLearningError('');
-    void Promise.all([
+    let inFlight = false;
+    const sync = async () => {
+      if (inFlight || document.hidden) return;
+      inFlight = true;
+      await Promise.all([
       supabase.from('student_law_progress').select('law_slug,status,last_viewed_at').eq('user_id', user.id).order('last_viewed_at', { ascending: false }),
       supabase.from('student_bookmarks').select('law_slug').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('student_assessment_attempts').select('id,law_slug,created_at,score,total_questions,percentage,passed').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
     ]).then(([progressResult, bookmarkResult, attemptResult]) => {
+      inFlight = false;
       if (!active) return;
       const firstError = progressResult.error ?? bookmarkResult.error ?? attemptResult.error;
-      if (firstError) setLearningError(t('Some learning data could not be loaded. Please refresh to try again.', 'কিছু শেখার তথ্য লোড করা যায়নি। আবার চেষ্টা করতে রিফ্রেশ করুন।'));
-      setProgress((progressResult.data ?? []) as ProgressRow[]);
-      setBookmarks((bookmarkResult.data ?? []).map((row) => row.law_slug));
-      setAttempts((attemptResult.data ?? []) as AttemptRow[]);
+      if (firstError) setLearningError(t('Some learning data could not be loaded. We’ll retry automatically.', 'কিছু শেখার তথ্য লোড করা যায়নি। স্বয়ংক্রিয়ভাবে আবার চেষ্টা করা হবে।'));
+      else { setLearningError(''); setLastSync(new Date()); }
+      if (!progressResult.error) setProgress((progressResult.data ?? []) as ProgressRow[]);
+      if (!bookmarkResult.error) setBookmarks((bookmarkResult.data ?? []).map((row) => row.law_slug));
+      if (!attemptResult.error) setAttempts((attemptResult.data ?? []) as AttemptRow[]);
       setLearningLoading(false);
     });
-    return () => { active = false; };
+    };
+    void sync();
+    const timer = window.setInterval(() => void sync(), 15000);
+    const onFocus = () => void sync();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, [user, t]);
 
   const completedCount = progress.filter((item) => item.status === 'completed').length;
   const availableAssessments = laws.filter((law) => law.isPublished !== false && law.assessment?.isPublished && (law.assessment.questions?.length ?? 0) > 0);
   const lawBySlug = useMemo(() => new Map(laws.map((law) => [law.slug, law])), [laws]);
+
+  const lastPosition = user ? readPosition(user.id) : null;
+  const resumeLaw = lastPosition ? lawBySlug.get(lastPosition.slug) : undefined;
 
   const displayName =
     profile?.full_name?.trim() || user?.email || 'Student';
@@ -182,6 +202,11 @@ export default function StudentDashboardPage() {
           <span className="btn-secondary w-fit">View certification</span>
         </Link>
 
+        <Link to="/student/review" className="btn-secondary">{t('Review missed questions and notes', 'ভুল প্রশ্ন ও নোট দেখুন')}</Link>
+        {resumeLaw && lastPosition && <Link className="btn-secondary" to={`/laws/${resumeLaw.slug}?section=${lastPosition.section}`}>
+          {t('Resume last lesson', 'শেষ পাঠে ফিরে যান')} · {tx(`law:${resumeLaw.slug}:title`, resumeLaw.titleEn, resumeLaw.titleBn)}
+        </Link>}
+        {lastSync && <p className="text-xs text-ink-muted">Last synced <time dateTime={lastSync.toISOString()}>{lastSync.toLocaleTimeString(language)}</time> · refreshes every 15 seconds</p>}
         {(learningError || contentError) && <p role="status" className="border border-bronze-200 bg-bronze-50 p-4 text-sm text-ink-muted">{learningError || contentError}</p>}
 
         <section className="grid gap-6 lg:grid-cols-2">

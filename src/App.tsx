@@ -1,3 +1,4 @@
+import { ViewerPresence } from '@/components/ViewerPresence';
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import Layout from '@/components/Layout';
@@ -21,6 +22,8 @@ const StudentDashboardPage = lazy(
 const AssessmentPage = lazy(() => import('@/pages/AssessmentPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
+const PasswordRecoveryPage = lazy(() => import('@/pages/PasswordRecoveryPage'));
+const LearningReviewPage = lazy(() => import('@/pages/LearningReviewPage'));
 const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'));
 const AdminDashboardPage = lazy(
   () => import('@/pages/admin/AdminDashboardPage')
@@ -64,6 +67,7 @@ export default function App() {
       <ContentProvider>
         <LanguageProvider>
           <BrowserRouter>
+          <ViewerPresence>
             <ScrollToTop />
             <DocumentMetadata />
             <Suspense fallback={<PageFallback />}>
@@ -78,6 +82,8 @@ export default function App() {
 
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/forgot-password" element={<PasswordRecoveryPage key="request" />} />
+                  <Route path="/reset-password" element={<PasswordRecoveryPage key="reset" reset />} />
 
                   <Route
                     path="/assessment/:lawSlug"
@@ -92,6 +98,7 @@ export default function App() {
                     path="/student"
                     element={<StudentDashboardPage />}
                   />
+                  <Route path="/student/review" element={<LearningReviewPage />} />
                   <Route path="/certification" element={<CertificationPage />} />
                   <Route path="/assessment/final" element={<CertificationPage />} />
                 </Route>
@@ -110,6 +117,7 @@ export default function App() {
                 </Route>
               </Routes>
             </Suspense>
+          </ViewerPresence>
           </BrowserRouter>
         </LanguageProvider>
       </ContentProvider>

@@ -1,220 +1,274 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Check, ChevronLeft, ChevronRight, Languages, Plus, Save, Search, ShieldCheck } from 'lucide-react';
+import { exportTranslationCsv, parseTranslationCsv } from '@/lib/translationCsv';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useContent } from '@/context/ContentContext';
-import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { supabase } from '@/lib/supabase';
 import { loadSiteTranslations } from '@/lib/translations';
+import { languageChoices } from '@/data/languageChoices';
 import { uiTranslationCatalog } from '@/data/uiTranslationCatalog';
-import { psychologyTranslationCatalog } from '@/components/PsychologyCarousel';
 
-type LanguageRow = { code: string; name_en: string; name_native: string; is_enabled: boolean; sort_order: number };
-type TranslationEntry = { key: string; group: string; label: string; english: string; bengali: string };
-type FinalQuestion = { id: string; question_en: string; question_bn: string; options_en: string[]; options_bn: string[]; explanation_en: string; explanation_bn: string };
-
-const PAGE_SIZE = 40;
-
-function buildEntries(laws: ReturnType<typeof useContent>['laws'], categories: ReturnType<typeof useContent>['categories'], finalQuestions: FinalQuestion[]): TranslationEntry[] {
-  const entries: TranslationEntry[] = uiTranslationCatalog.map(({ english, bengali }) => ({ key: `ui:${english}`, group: 'Website interface', label: english, english, bengali }));
-  for (const item of psychologyTranslationCatalog) entries.push({ key: item.key, group: 'Psychology carousel', label: item.label, english: item.english, bengali: item.bengali });
-  for (const category of categories) entries.push({ key: `category:${category.id}:label`, group: 'Categories', label: category.labelEn, english: category.labelEn, bengali: category.labelBn });
-  for (const law of laws) {
-    entries.push({ key: `law:${law.slug}:title`, group: `Law ${String(law.number).padStart(2, '0')}`, label: `${law.titleEn} · title`, english: law.titleEn, bengali: law.titleBn });
-    if (law.shortEn || law.shortBn) entries.push({ key: `law:${law.slug}:short`, group: `Law ${String(law.number).padStart(2, '0')}`, label: 'Summary', english: law.shortEn, bengali: law.shortBn });
-    for (const [sectionIndex, section] of (law.sections ?? []).entries()) {
-      entries.push({ key: `law:${law.slug}:section:${sectionIndex}:heading`, group: `Law ${String(law.number).padStart(2, '0')}`, label: `Section ${sectionIndex + 1} · heading`, english: section.headingEn, bengali: section.headingBn });
-      const paragraphCount = Math.max(section.bodyEn.length, section.bodyBn.length);
-      for (let paragraphIndex = 0; paragraphIndex < paragraphCount; paragraphIndex++) {
-        const english = section.bodyEn[paragraphIndex] ?? '';
-        const bengali = section.bodyBn[paragraphIndex] ?? '';
-        if (english || bengali) entries.push({ key: `law:${law.slug}:section:${sectionIndex}:body:${paragraphIndex}`, group: `Law ${String(law.number).padStart(2, '0')}`, label: `Section ${sectionIndex + 1} · paragraph ${paragraphIndex + 1}`, english, bengali });
-      }
-    }
-    for (const question of law.assessment?.questions ?? []) {
-      const prefix = `law:${law.slug}:assessment:${question.id}`;
-      entries.push({ key: `${prefix}:question`, group: `Law ${String(law.number).padStart(2, '0')} · Assessment`, label: question.questionEn || `Question ${question.id}`, english: question.questionEn, bengali: question.questionBn });
-      question.optionsEn.forEach((english, index) => entries.push({ key: `${prefix}:option:${index}`, group: `Law ${String(law.number).padStart(2, '0')} · Assessment`, label: `Question option ${index + 1}`, english, bengali: question.optionsBn[index] }));
-      if (question.explanationEn || question.explanationBn) entries.push({ key: `${prefix}:explanation`, group: `Law ${String(law.number).padStart(2, '0')} · Assessment`, label: 'Answer explanation', english: question.explanationEn, bengali: question.explanationBn });
-    }
-  }
-  for (const question of finalQuestions) {
-    const prefix = `final:assessment:${question.id}`;
-    entries.push({ key: `${prefix}:question`, group: 'Final assessment', label: question.question_en || `Question ${question.id}`, english: question.question_en, bengali: question.question_bn });
-    question.options_en.forEach((english, index) => entries.push({ key: `${prefix}:option:${index}`, group: 'Final assessment', label: `Question option ${index + 1}`, english, bengali: question.options_bn[index] ?? '' }));
-    if (question.explanation_en || question.explanation_bn) entries.push({ key: `${prefix}:explanation`, group: 'Final assessment', label: 'Answer explanation', english: question.explanation_en, bengali: question.explanation_bn });
-  }
-  return entries.filter((entry) => entry.english || entry.bengali);
-}
+type LanguageRow = { code: string; name_en: string; name_native: string; is_enabled: boolean };
+const builtIn = new Set(['en', 'bn']);
 
 export default function AdminLanguagesPage() {
-  const { laws, categories } = useContent();
+  const { laws, categories, loading, error: contentError } = useContent();
   const { user } = useAuth();
   const { refreshLanguages } = useLanguage();
   const [languages, setLanguages] = useState<LanguageRow[]>([]);
-  const [selectedCode, setSelectedCode] = useState('');
-  const [stored, setStored] = useState<Record<string, string>>({});
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [finalQuestions, setFinalQuestions] = useState<FinalQuestion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [listed, setListed] = useState(false);
+  const [code, setCode] = useState('');
+  const [languageSearch, setLanguageSearch] = useState('');
+  const [activeCode, setActiveCode] = useState('');
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState('');
+  const [entryKey, setEntryKey] = useState('');
+  const [text, setText] = useState('');
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
-  const [form, setForm] = useState({ code: '', nameEn: '', nameNative: '' });
-
-  const loadLanguages = useCallback(async () => {
-    const [languageResult, questionsResult] = await Promise.all([
-      supabase.from('site_languages').select('code,name_en,name_native,is_enabled,sort_order').order('sort_order').order('code'),
-      supabase.from('certification_final_questions').select('id,question_en,question_bn,options_en,options_bn,explanation_en,explanation_bn').order('sort_order'),
-    ]);
-    if (languageResult.error) {
-      setError(`Language settings are unavailable. Apply the latest POWERLAB database migration first. (${languageResult.error.message})`);
-      setLoading(false);
-      return;
-    }
-    const rows = (languageResult.data ?? []) as LanguageRow[];
-    setLanguages(rows);
-    setFinalQuestions((questionsResult.data ?? []) as FinalQuestion[]);
-    if (questionsResult.error) setError(`Final assessment translations could not load: ${questionsResult.error.message}`);
-    setSelectedCode((current) => !current || !rows.some((item) => item.code === current)
-      ? rows.find((item) => item.code !== 'en' && item.code !== 'bn')?.code ?? 'en'
-      : current);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { void loadLanguages(); }, [loadLanguages]);
 
   useEffect(() => {
-    if (!selectedCode || selectedCode === 'en' || selectedCode === 'bn') {
-      setStored({});
-      setDrafts({});
-      return;
-    }
     const request = new AbortController();
-    setStored({});
-    setDrafts({});
-    void loadSiteTranslations(selectedCode, request.signal)
-      .then((values) => {
+    void supabase.from('site_languages').select('code,name_en,name_native,is_enabled').order('name_en')
+      .abortSignal(request.signal).then(({ data, error: loadError }) => {
         if (request.signal.aborted) return;
-        setStored(values);
-        setDrafts(values);
-      })
-      .catch((loadError: { message: string }) => {
-        if (!request.signal.aborted) setError(loadError.message);
+        if (loadError) setError(loadError.message);
+        else { setLanguages(data); setListed(true); }
       });
     return () => request.abort();
-  }, [selectedCode]);
+  }, []);
 
-  const entries = useMemo(() => buildEntries(laws, categories, finalQuestions), [laws, categories, finalQuestions]);
-  const filteredEntries = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return entries.filter((item) => !text || `${item.group} ${item.label} ${item.english} ${item.bengali}`.toLowerCase().includes(text));
-  }, [entries, query]);
-  const pageCount = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
-  const visibleEntries = filteredEntries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const changedKeys = Object.keys(drafts).filter((key) => (drafts[key] ?? '') !== (stored[key] ?? ''));
-  const translatedCount = entries.filter((entry) => Boolean((drafts[entry.key] ?? '').trim())).length;
+  useEffect(() => {
+    if (!activeCode) return;
+    const request = new AbortController();
+    void loadSiteTranslations(activeCode, request.signal).then((data) => {
+      if (request.signal.aborted) return;
+      setTranslations(data);
+      setReady(true);
+    }).catch(() => {
+      if (!request.signal.aborted) setError('Could not load this language’s saved translations.');
+    });
+    return () => request.abort();
+  }, [activeCode]);
 
-  useEffect(() => { setPage(0); }, [query, selectedCode]);
+  const catalogue = useMemo(() => {
+    const entries = new Map<string, { text: string; label: string }>();
+    const add = (key: string, text: string, group: string) => {
+      if (key.length <= 500 && text.trim()) entries.set(key, { text, label: `${group} · ${text.slice(0, 90)}` });
+    };
+    for (const item of uiTranslationCatalog) add(`ui:${item.english}`, item.english, 'Interface');
+    for (const category of categories) add(`category:${category.id}:label`, category.labelEn, 'Category');
+    for (const law of laws.filter((item) => item.isPublished !== false)) {
+      const prefix = `law:${law.slug}`;
+      const group = `Law ${law.number}`;
+      add(`${prefix}:title`, law.titleEn, group);
+      add(`${prefix}:short`, law.shortEn, group);
+      law.sections?.forEach((section, index) => {
+        add(`${prefix}:section:${index}:heading`, section.headingEn, group);
+        section.bodyEn.forEach((body, paragraph) => add(`${prefix}:section:${index}:body:${paragraph}`, body, group));
+      });
+    }
+    return entries;
+  }, [categories, laws]);
 
-  async function createLanguage(event: FormEvent<HTMLFormElement>) {
+  const existing = new Set(languages.map((language) => language.code));
+  const choices = languageChoices.filter(({ code, name }) =>
+    !existing.has(code) && !builtIn.has(code) && name.toLowerCase().includes(languageSearch.trim().toLowerCase()));
+  const selected = choices.find((language) => language.code === code);
+  const active = languages.find((language) => language.code === activeCode);
+  const visibleEntries = Array.from(catalogue).filter(([key, item]) =>
+    key === entryKey || item.label.toLowerCase().includes(filter.trim().toLowerCase()));
+  const translatedCount = Array.from(catalogue.keys()).filter((key) => Boolean(translations[key]?.trim())).length;
+
+  function editLanguage(next: string) {
+    if (next === activeCode) return;
+    setActiveCode(next);
+    setReady(false);
+    setTranslations({});
+    setFilter('');
+    setEntryKey('');
+    setText('');
+    setError('');
+    setNotice('');
+  }
+
+  async function addLanguage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const code = form.code.trim().toLowerCase();
-    if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(code)) { setError('Use a language code such as es, fr, or pt-br.'); return; }
-    if (!form.nameEn.trim() || !form.nameNative.trim()) { setError('Enter both the language name and its native name.'); return; }
-    setSaving(true); setError(''); setNotice('');
-    const { error: insertError } = await supabase.from('site_languages').insert({ code, name_en: form.nameEn.trim(), name_native: form.nameNative.trim(), is_enabled: true, sort_order: languages.length });
-    if (insertError) setError(insertError.message);
+    if (!selected || busy) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    const native = new Intl.DisplayNames([selected.code], { type: 'language', fallback: 'none' }).of(selected.code);
+    const { data, error: createError } = await supabase.from('site_languages').insert({
+      code: selected.code, name_en: selected.name, name_native: native ?? selected.name, is_enabled: false, sort_order: 50,
+    }).select('code,name_en,name_native,is_enabled').single<LanguageRow>();
+    if (createError) setError(createError.message);
     else {
-      setForm({ code: '', nameEn: '', nameNative: '' });
-      setSelectedCode(code);
-      setNotice(`${form.nameEn.trim()} added. Add translations below; blank entries will show English until translated.`);
-      await loadLanguages();
+      setLanguages((current) => [...current, data]);
+      setCode('');
+      setLanguageSearch('');
+      editLanguage(data.code);
+      setNotice(`${data.name_en} draft created.`);
+    }
+    setBusy(false);
+  }
+
+  async function saveTranslation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user || !ready || busy || !entryKey || !catalogue.has(entryKey) || !text.trim()) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    const value = text.trim();
+    const { error: saveError } = await supabase.from('site_translations').upsert({
+      language_code: activeCode, translation_key: entryKey, value,
+      updated_by: user.id, updated_at: new Date().toISOString(),
+    }, { onConflict: 'language_code,translation_key' });
+    if (saveError) setError(saveError.message);
+    else {
+      setTranslations((current) => ({ ...current, [entryKey]: value }));
+      setNotice('Translation saved.');
+      if (active?.is_enabled) await refreshLanguages();
+    }
+    setBusy(false);
+  }
+
+  function downloadCsv() {
+    const rows: [string, string, string][] = Array.from(catalogue, ([key, item]) => [key, item.text, translations[key] ?? '']);
+    const url = URL.createObjectURL(new Blob([exportTranslationCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `powerlab-${activeCode}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function importCsv(file: File) {
+    if (!user || !ready || busy) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      if (file.size > 2_000_000) throw new Error('Choose a CSV under 2 MB.');
+      const parsed = parseTranslationCsv(await file.text());
+      const keys = new Set(parsed.map(([key]) => key));
+      if (keys.size !== parsed.length || parsed.some(([key]) => !catalogue.has(key))) {
+        throw new Error('The CSV contains duplicate or unknown keys. Start from the exported template.');
+      }
+      const entries = parsed.filter(([, value]) => value.trim());
+      if (!entries.length) throw new Error('Add at least one translation to the CSV.');
+      const now = new Date().toISOString();
+      const rows = entries.map(([key, value]) => ({
+        language_code: activeCode, translation_key: key, value,
+        updated_by: user.id, updated_at: now,
+      }));
+      const { error } = await supabase.from('site_translations').upsert(rows, { onConflict: 'language_code,translation_key' });
+      if (error) throw error;
+      setTranslations((current) => ({ ...current, ...Object.fromEntries(entries) }));
+      setText((current) => new Map(entries).get(entryKey) ?? current);
+      if (active?.is_enabled) await refreshLanguages();
+      setNotice(`${entries.length} translations imported.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : (error as { message?: string }).message ?? 'Could not import the CSV.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function publish(isEnabled: boolean) {
+    if (!active || !ready || busy || (isEnabled && !translatedCount)) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    const { data, error: publishError } = await supabase.from('site_languages')
+      .update({ is_enabled: isEnabled, updated_at: new Date().toISOString() }).eq('code', active.code)
+      .select('code,name_en,name_native,is_enabled').single<LanguageRow>();
+    if (publishError) setError(publishError.message);
+    else {
+      setLanguages((current) => current.map((language) => language.code === data.code ? data : language));
       await refreshLanguages();
+      setNotice(isEnabled ? 'Language published.' : 'Language moved to drafts.');
     }
-    setSaving(false);
+    setBusy(false);
   }
 
-  async function updateLanguage(language: LanguageRow, patch: Partial<Pick<LanguageRow, 'name_en' | 'name_native' | 'is_enabled'>>) {
-    if (language.code === 'en' && patch.is_enabled === false) { setError('English must remain enabled as the fallback language.'); return; }
-    setSaving(true); setError(''); setNotice('');
-    const { error: updateError } = await supabase.from('site_languages').update(patch).eq('code', language.code);
-    if (updateError) setError(updateError.message);
-    else { setNotice(`${language.name_en} settings saved.`); await loadLanguages(); await refreshLanguages(); }
-    setSaving(false);
-  }
-
-  async function saveTranslations() {
-    if (!selectedCode || selectedCode === 'en' || selectedCode === 'bn' || !changedKeys.length) return;
-    setSaving(true); setError(''); setNotice('');
-    const deleteKeys = changedKeys.filter((key) => !(drafts[key] ?? '').trim() && stored[key]);
-    if (deleteKeys.length) {
-      const { error: deleteError } = await supabase.from('site_translations').delete().eq('language_code', selectedCode).in('translation_key', deleteKeys);
-      if (deleteError) { setError(deleteError.message); setSaving(false); return; }
-    }
-    const rows = changedKeys.filter((key) => (drafts[key] ?? '').trim()).map((key) => ({ language_code: selectedCode, translation_key: key, value: drafts[key].trim(), updated_by: user?.id ?? null }));
-    if (rows.length) {
-      const { error: saveError } = await supabase.from('site_translations').upsert(rows, { onConflict: 'language_code,translation_key' });
-      if (saveError) { setError(saveError.message); setSaving(false); return; }
-    }
-    const next = { ...drafts };
-    for (const key of deleteKeys) delete next[key];
-    setStored(next);
-    setDrafts(next);
-    setNotice(`${rows.length} translation${rows.length === 1 ? '' : 's'} saved. Changes are now available in the website language selector.`);
-    await refreshLanguages();
-    setSaving(false);
-  }
-
-  if (loading) return <p className="py-10 text-sm text-ink-muted">Loading language settings…</p>;
-
-  return <div className="animate-fade-up space-y-8">
-    <header className="border-b border-line pb-8"><p className="eyebrow text-bronze-600">Administration</p><h1 className="mt-3 font-display text-3xl text-ink sm:text-4xl">Languages & translations</h1><p className="mt-3 max-w-3xl text-sm leading-relaxed text-ink-muted">Add languages to the public site and translate interface labels, lessons, categories, and assessments. English and Bengali remain available as the existing source languages.</p></header>
-    {(error || notice) && <p role={error ? 'alert' : 'status'} className={`border p-4 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || notice}</p>}
-
-    <section className="space-y-5 border border-line bg-surface p-5 sm:p-7">
-      <div className="flex items-start gap-3"><Languages size={20} className="mt-0.5 text-forest-700" /><div><h2 className="font-display text-xl text-ink">Website languages</h2><p className="mt-1 text-sm text-ink-muted">Enabled languages appear in the public website language selector. English is the fallback.</p></div></div>
-      <form onSubmit={createLanguage} className="grid gap-3 md:grid-cols-[0.8fr_1fr_1fr_auto]">
-        <label className="text-xs font-semibold text-ink-muted">Language code<input className="field-input mt-1" placeholder="es" value={form.code} maxLength={16} onChange={(event) => setForm({ ...form, code: event.target.value })} /></label>
-        <label className="text-xs font-semibold text-ink-muted">Name in English<input className="field-input mt-1" placeholder="Spanish" value={form.nameEn} onChange={(event) => setForm({ ...form, nameEn: event.target.value })} /></label>
-        <label className="text-xs font-semibold text-ink-muted">Native name<input className="field-input mt-1" placeholder="Español" value={form.nameNative} onChange={(event) => setForm({ ...form, nameNative: event.target.value })} /></label>
-        <button className="btn-primary self-end" type="submit" disabled={saving}><Plus size={16} /> Add language</button>
-      </form>
-      <div className="divide-y divide-line border border-line">
-        {languages.map((item) => <LanguageEditor key={item.code} language={item} saving={saving} onSave={(patch) => void updateLanguage(item, patch)} />)}
-      </div>
-    </section>
-
-    <section className="space-y-5">
-      <div className="flex flex-col gap-4 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <div><h2 className="font-display text-xl text-ink">Translate the website</h2><p className="mt-1 max-w-2xl text-sm text-ink-muted">Translate public interface text and the current law, category, lesson, and assessment content. Missing translations safely fall back to English.</p></div>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="text-xs font-semibold text-ink-muted">Language to translate<select className="field-input mt-1 min-w-44" value={selectedCode} onChange={(event) => setSelectedCode(event.target.value)}>{languages.filter((item) => item.code !== 'en' && item.code !== 'bn').map((item) => <option key={item.code} value={item.code}>{item.name_native} · {item.name_en}</option>)}</select></label>
-          <button type="button" className="btn-primary" onClick={() => void saveTranslations()} disabled={saving || !changedKeys.length || !selectedCode || selectedCode === 'en' || selectedCode === 'bn'}><Save size={15} /> Save {changedKeys.length ? `${changedKeys.length} changes` : 'translations'}</button>
-        </div>
-      </div>
-      {!languages.some((item) => item.code !== 'en' && item.code !== 'bn') ? <div className="border border-line bg-surface p-6 text-sm text-ink-muted">Add a language above to start translating the site. The built-in English and Bengali translations remain in the existing content editor.</div> : <>
-        <div className="flex flex-wrap items-center justify-between gap-3"><label className="relative block w-full sm:max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" /><input className="field-input pl-9" aria-label="Search translation text" placeholder="Search text, law, or section" value={query} onChange={(event) => setQuery(event.target.value)} /></label><p className="text-xs text-ink-muted">{translatedCount} of {entries.length} entries translated</p></div>
-        <div className="divide-y divide-line border border-line bg-surface">
-          {visibleEntries.map((entry) => <article key={entry.key} className="grid gap-3 p-4 lg:grid-cols-2 lg:gap-6"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-bronze-600">{entry.group}</p><p className="mt-1 text-sm font-medium text-ink">{entry.label}</p><p className="mt-2 text-sm leading-relaxed text-ink-muted">{entry.english}</p>{entry.bengali && <p className="mt-1 text-sm leading-relaxed text-ink-muted font-bengali">বাংলা: {entry.bengali}</p>}</div><label className="text-xs font-semibold text-ink-muted">{languages.find((item) => item.code === selectedCode)?.name_native ?? selectedCode}<textarea className="field-input mt-1 min-h-20" lang={selectedCode} value={drafts[entry.key] ?? ''} onChange={(event) => setDrafts((current) => ({ ...current, [entry.key]: event.target.value }))} placeholder="Add a reviewed translation" /></label></article>)}
-          {!visibleEntries.length && <p className="p-6 text-sm text-ink-muted">No translation text matches this search.</p>}
-        </div>
-        <div className="flex items-center justify-between gap-4"><p className="text-xs text-ink-muted">Page {page + 1} of {pageCount}</p><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft size={15} /> Previous</button><button type="button" className="btn-secondary" disabled={page + 1 >= pageCount} onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}>Next <ChevronRight size={15} /></button></div></div>
-      </>}
-    </section>
-    <p className="flex items-start gap-2 text-xs leading-relaxed text-ink-muted"><ShieldCheck size={15} className="mt-0.5 shrink-0 text-forest-700" />Only verified administrators can add languages or edit translations. Public visitors can read enabled translations; they cannot change them.</p>
-  </div>;
-}
-
-function LanguageEditor({ language, saving, onSave }: { language: LanguageRow; saving: boolean; onSave: (patch: Partial<Pick<LanguageRow, 'name_en' | 'name_native' | 'is_enabled'>>) => void }) {
-  const [nameEn, setNameEn] = useState(language.name_en);
-  const [nameNative, setNameNative] = useState(language.name_native);
-  const isCoreLanguage = language.code === 'en' || language.code === 'bn';
-  return <div className="grid gap-3 p-4 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
-    <label className="text-xs text-ink-muted">{language.code}<input className="field-input mt-1" value={nameEn} disabled={isCoreLanguage} onChange={(event) => setNameEn(event.target.value)} /></label>
-    <label className="text-xs text-ink-muted">Native name<input className="field-input mt-1" value={nameNative} disabled={isCoreLanguage} onChange={(event) => setNameNative(event.target.value)} /></label>
-    <button type="button" className="btn-secondary" disabled={saving || isCoreLanguage || (nameEn === language.name_en && nameNative === language.name_native)} onClick={() => onSave({ name_en: nameEn.trim(), name_native: nameNative.trim() })}><Save size={14} /> Save name</button>
-    <button type="button" className={`btn-secondary ${language.is_enabled ? '' : 'text-ink-muted'}`} disabled={saving || language.code === 'en'} onClick={() => onSave({ is_enabled: !language.is_enabled })}>{language.is_enabled ? <><Check size={14} /> Enabled</> : 'Enable'}</button>
-  </div>;
+  return (
+    <div className="space-y-7">
+      <header className="border-b border-line pb-8">
+        <h1 className="font-display text-3xl text-ink">Languages</h1>
+        <p className="mt-3 text-sm text-ink-muted">Add a language and write or paste translations for the interface and published lessons.</p>
+      </header>
+      {error && <p role="alert" className="text-sm text-red-800">{error}</p>}
+      {notice && <p role="status" className="text-sm text-forest-700">{notice}</p>}
+      <section className="space-y-4 border border-line bg-surface p-5 sm:p-7">
+        <h2 className="font-display text-xl text-ink">Add a language</h2>
+        <form onSubmit={(event) => void addLanguage(event)} className="flex flex-wrap items-end gap-3">
+          <label className="block w-full max-w-xs text-sm">Search language names
+            <input className="field-input mt-1" type="search" value={languageSearch} disabled={busy}
+              onChange={(event) => { setLanguageSearch(event.target.value); setCode(''); }} />
+          </label>
+          <label className="block w-full max-w-xs text-sm">Language
+            <select className="field-input mt-1" value={selected?.code ?? ''} disabled={!listed || busy || !choices.length}
+              required onChange={(event) => setCode(event.target.value)}>
+              <option value="">{choices.length ? 'Choose a language' : 'No matching languages'}</option>
+              {choices.map((language) => <option key={language.code} value={language.code}>{language.name}</option>)}
+            </select>
+          </label>
+          <button type="submit" className="btn-primary" disabled={busy || !listed || !selected}>Create draft</button>
+        </form>
+      </section>
+      <section className="space-y-4 border border-line bg-surface p-5 sm:p-7">
+        <h2 className="font-display text-xl text-ink">Site languages</h2>
+        <ul className="flex flex-wrap gap-2">{languages.map((language) => <li key={language.code}>
+          {builtIn.has(language.code) ? <span className="inline-block border border-line px-3 py-2 text-sm">{language.name_en} · Built in</span> :
+            <button type="button" className="btn-secondary" disabled={busy} aria-pressed={activeCode === language.code}
+              onClick={() => editLanguage(language.code)}>{language.name_en} · {language.is_enabled ? 'Published' : 'Draft'}</button>}
+        </li>)}</ul>
+      </section>
+      {active && (
+        <section className="space-y-4 border border-line bg-surface p-5 sm:p-7">
+          <h2 className="font-display text-xl text-ink">Edit {active.name_en} translations</h2>
+          {contentError && <p role="alert" className="text-sm text-red-800">{contentError}</p>}
+          {!ready || loading ? <p className="text-sm text-ink-muted">Loading translation entries…</p> : <>
+            <p className="text-sm text-ink-muted">{translatedCount} of {catalogue.size} entries translated. Untranslated text falls back to English.</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <button type="button" className="btn-secondary" disabled={busy || Boolean(contentError)} onClick={downloadCsv}>Export translations CSV</button>
+              <label className="block text-sm">Import translations CSV
+                <input type="file" accept=".csv,text/csv" className="field-input mt-1"
+                  disabled={busy || Boolean(contentError)} onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) void importCsv(file);
+                  }} />
+              </label>
+            </div>
+            <form onSubmit={(event) => void saveTranslation(event)} className="space-y-4">
+              <label className="block text-sm">Search source text
+                <input className="field-input mt-1" type="search" value={filter} disabled={busy} onChange={(event) => setFilter(event.target.value)} />
+              </label>
+              <label className="block text-sm">Text to translate
+                <select className="field-input mt-1" value={entryKey} disabled={busy || !visibleEntries.length}
+                  onChange={(event) => { setEntryKey(event.target.value); setText(translations[event.target.value] ?? ''); }}>
+                  <option value="">{visibleEntries.length ? 'Choose an entry' : 'No matching entries'}</option>
+                  {visibleEntries.map(([key, item]) => <option key={key} value={key}>{item.label}{translations[key] ? ' (saved)' : ''}</option>)}
+                </select>
+              </label>
+              {entryKey && <>
+                <p className="whitespace-pre-wrap border border-line p-3 text-sm" lang="en">{catalogue.get(entryKey)?.text}</p>
+                <label className="block text-sm">Translation
+                  <textarea className="field-input mt-1" rows={4} lang={active.code} value={text} disabled={busy} required
+                    onChange={(event) => setText(event.target.value)} />
+                </label>
+                <button type="submit" className="btn-primary" disabled={busy || !text.trim()}>Save translation</button>
+              </>}
+            </form>
+            <button type="button" className="btn-secondary" disabled={busy || Boolean(contentError) || (!active.is_enabled && !translatedCount)}
+              onClick={() => void publish(!active.is_enabled)}>{active.is_enabled ? 'Unpublish language' : 'Publish language'}</button>
+          </>}
+        </section>
+      )}
+    </div>
+  );
 }
