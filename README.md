@@ -52,3 +52,9 @@ Keep service-role keys out of client environment variables. Start the developmen
 | `npm run preview` | Serve the production build locally. |
 
 Application code lives in `src/`, static assets in `public/`, and database migrations in `supabase/migrations/`.
+
+## Project guides
+
+- [STRUCTURE.md](STRUCTURE.md) maps routes, source directories, and key data flows.
+- [PROMPT.md](PROMPT.md) provides a reusable task brief for future changes.
+- [PLAN.md](PLAN.md) tracks development, testing, and release checks.
