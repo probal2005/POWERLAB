@@ -9,6 +9,7 @@ export default function AdminSettingsPage() {
   const [readyModules, setReadyModules] = useState(0);
   const [activeQuestions, setActiveQuestions] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [passDraft, setPassDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -31,7 +32,7 @@ export default function AdminSettingsPage() {
   useEffect(() => { void load(); }, []);
 
   async function save(patch: Partial<CertificationProgramSettings>) {
-    if (!settings) return;
+    if (!settings || saving) return;
     const next = { ...settings, ...patch };
     if (patch.programme_enabled || patch.final_assessment_published) {
       const [modules, questions] = await Promise.all([
@@ -46,8 +47,8 @@ export default function AdminSettingsPage() {
     if (next.programme_enabled && !next.final_assessment_published) { setError('Publish the final assessment before enabling the programme.'); return; }
     setSaving(true); setError(''); setMessage('');
     const { data: authData } = await supabase.auth.getUser();
-    const { error: updateError } = await supabase.from('certification_program_settings').update({ programme_enabled: next.programme_enabled, final_assessment_published: next.final_assessment_published, pass_percentage: next.pass_percentage, updated_by: authData.user?.id ?? null }).eq('id', true);
-    if (updateError) setError(updateError.message); else { setSettings(next); setMessage('Settings saved.'); }
+    const { data: savedSettings, error: updateError } = await supabase.from('certification_program_settings').update({ ...patch, updated_by: authData.user?.id ?? null, updated_at: new Date().toISOString() }).eq('id', true).select('*').single<CertificationProgramSettings>();
+    if (updateError) setError(updateError.message); else { setSettings(savedSettings); if (patch.pass_percentage !== undefined) setPassDraft(null); setMessage('Settings saved.'); }
     setSaving(false);
   }
 
@@ -60,7 +61,17 @@ export default function AdminSettingsPage() {
       <section className="space-y-5 border border-line bg-surface p-6 sm:p-8"><div className="flex items-start gap-3"><Settings2 size={20} className="mt-0.5 text-forest-700" /><div><h2 className="font-display text-xl text-ink">Certification programme</h2><p className="mt-1 text-sm text-ink-muted">Publication controls have server-enforced content and question-bank prerequisites.</p></div></div>
         <label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={settings.final_assessment_published} disabled={saving} onChange={(event) => void save({ final_assessment_published: event.target.checked })} /> Publish final assessment</label>
         <label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={settings.programme_enabled} disabled={saving} onChange={(event) => void save({ programme_enabled: event.target.checked })} /> Enable certification programme</label>
-        <label className="block max-w-xs text-xs font-semibold text-ink-muted">Passing score (%)<input className="field-input mt-1" type="number" min="1" max="100" value={settings.pass_percentage} disabled={saving} onChange={(event) => setSettings({ ...settings, pass_percentage: Math.max(1, Math.min(100, Number(event.target.value) || 1)) })} onBlur={() => void save({ pass_percentage: settings.pass_percentage })} /></label>
+        <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
+          event.preventDefault();
+          const value = Number(passDraft);
+          if (passDraft !== null && Number.isInteger(value) && value >= 1 && value <= 100) void save({ pass_percentage: value });
+        }}>
+          <label className="block max-w-xs text-xs font-semibold text-ink-muted">Passing score (%)
+            <input className="field-input mt-1" type="number" min={1} max={100} step={1} required
+              value={passDraft ?? settings.pass_percentage} disabled={saving} onChange={(event) => setPassDraft(event.target.value)} />
+          </label>
+          <button type="submit" className="btn-secondary" disabled={saving || passDraft === null}>Save passing score</button>
+        </form>
         <Link to="/admin/certification" className="btn-secondary w-fit"><ShieldCheck size={15} /> Review modules and questions</Link>
       </section>
       <p className="text-xs leading-relaxed text-ink-muted">Authentication security policies are managed by Supabase. No service secret is stored in this admin page.</p>

@@ -36,6 +36,7 @@ export interface Law {
   category: string;
   sections?: LawSection[];
   assessment?: LawAssessment;
+  assessmentRevision?: string;
   isPublished?: boolean;
 }
 

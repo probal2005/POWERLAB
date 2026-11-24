@@ -1,4 +1,4 @@
-import { ViewerPresence } from '@/components/ViewerPresence';
+import { TrackViewerPresence } from '@/components/ViewerPresence';
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import Layout from '@/components/Layout';
@@ -67,7 +67,7 @@ export default function App() {
       <ContentProvider>
         <LanguageProvider>
           <BrowserRouter>
-          <ViewerPresence>
+            <TrackViewerPresence />
             <ScrollToTop />
             <DocumentMetadata />
             <Suspense fallback={<PageFallback />}>
@@ -117,7 +117,6 @@ export default function App() {
                 </Route>
               </Routes>
             </Suspense>
-          </ViewerPresence>
           </BrowserRouter>
         </LanguageProvider>
       </ContentProvider>

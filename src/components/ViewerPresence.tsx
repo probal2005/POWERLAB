@@ -1,74 +1,84 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
-const topic = 'powerlab:active-public-viewers';
-const localKey = 'powerlab:viewer-id';
-const empty = { count: null as number | null, updated: null as Date | null, connected: null as boolean | null };
-const ViewerContext = createContext(empty);
+const storageKey = 'powerlab:viewer-heartbeat-id';
+let temporaryId: string | undefined;
 
-export function ViewerPresence({ children }: { children: ReactNode }) {
+function getViewerId() {
+  temporaryId ??= crypto.randomUUID();
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(saved)) return saved;
+    localStorage.setItem(storageKey, temporaryId);
+  } catch { /* A temporary ID is enough for a browser session. */ }
+  return temporaryId;
+}
+
+export function TrackViewerPresence() {
   const { pathname } = useLocation();
-  const publicPage = !/^\/(admin|student|certification)(\/|$)/.test(pathname);
-  const visible = useRef(publicPage);
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const subscribed = useRef(false);
-  const [status, setStatus] = useState(empty);
-
+  const publicPage = !/^\/(admin|student|certification)(\/|$)/.test(pathname) && pathname !== '/assessment/final';
   useEffect(() => {
-    visible.current = publicPage;
-    const channel = channelRef.current;
-    if (!channel || !subscribed.current) return;
-    if (publicPage) void channel.track({ active: true });
-    else void channel.untrack();
-  }, [publicPage]);
-
-  useEffect(() => {
-    let active = true;
-    const start = window.setTimeout(() => {
-      let browserId = crypto.randomUUID() as string;
-      try {
-        browserId = localStorage.getItem(localKey) || browserId;
-        localStorage.setItem(localKey, browserId);
-      } catch { /* Fall back to this tab when storage is unavailable. */ }
-      const channel = supabase.channel(topic, { config: { presence: { key: browserId, enabled: true } } });
-      channelRef.current = channel;
-      channel.on('presence', { event: 'sync' }, () => {
-        if (active) setStatus({ count: Object.keys(channel.presenceState()).length, updated: new Date(), connected: true });
-      }).subscribe((phase) => {
-        if (!active) return;
-        subscribed.current = phase === 'SUBSCRIBED';
-        if (subscribed.current && visible.current) void channel.track({ active: true });
-        if (phase === 'CHANNEL_ERROR' || phase === 'TIMED_OUT' || phase === 'CLOSED') {
-          setStatus((current) => ({ ...current, connected: false }));
-        }
-      });
-    }, 0);
-    return () => {
-      active = false;
-      window.clearTimeout(start);
-      const channel = channelRef.current;
-      channelRef.current = null;
-      subscribed.current = false;
-      if (channel) void supabase.removeChannel(channel);
+    if (!publicPage) return;
+    const browserId = getViewerId();
+    const controller = new AbortController();
+    const ping = () => {
+      if (!document.hidden && navigator.onLine) {
+        void supabase.rpc('record_powerlab_viewer', { p_browser_id: browserId })
+          .abortSignal(controller.signal).then(() => {});
+      }
     };
-  }, []);
-
-  return <ViewerContext.Provider value={status}>{children}</ViewerContext.Provider>;
+    ping();
+    const timer = window.setInterval(ping, 20000);
+    document.addEventListener('visibilitychange', ping);
+    window.addEventListener('online', ping);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', ping);
+      window.removeEventListener('online', ping);
+    };
+  }, [publicPage]);
+  return null;
 }
 
 export function ViewerCount() {
-  const { count, updated, connected } = useContext(ViewerContext);
+  const [last, setLast] = useState<{ count: number; checkedAt: string } | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let inFlight = false;
+    const controller = new AbortController();
+    const check = async () => {
+      if (inFlight || document.hidden) return;
+      inFlight = true;
+      const { data, error } = await supabase.rpc('get_powerlab_viewer_count').abortSignal(controller.signal);
+      inFlight = false;
+      if (controller.signal.aborted) return;
+      if (error || typeof data?.count !== 'number') setFailed(true);
+      else { setLast(data); setFailed(false); }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 10000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('online', check);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('online', check);
+    };
+  }, []);
+
   return (
     <section className="space-y-3 border border-line bg-surface p-5">
       <h2 className="font-display text-xl text-ink">Live website viewers</h2>
-      <p className="font-display text-3xl text-ink">{count ?? '—'}</p>
-      <p className="text-sm text-ink-muted">{connected === false ? 'Connection lost · showing last known count' : connected ? 'Connected browsers' : 'Connecting…'}</p>
-      {updated && <p className="text-xs text-ink-muted">
-        Last updated <time dateTime={updated.toISOString()}>{updated.toLocaleTimeString()}</time>
+      <p className="font-display text-3xl text-ink">{last?.count ?? '—'}</p>
+      <p className="text-sm text-ink-muted">{failed ? (last ? 'Check failed. Showing the last known count.' : 'Viewer count unavailable. Retrying…') : last ? 'Active browsers' : 'Checking viewers…'}</p>
+      {last && <p className="text-xs text-ink-muted">
+        Last checked <time dateTime={last.checkedAt}>{new Date(last.checkedAt).toLocaleTimeString()}</time>
       </p>}
-      <p className="text-xs text-ink-muted">Counts connected browsers on public pages. Open tabs in the same browser are counted once when local storage is available.</p>
+      <p className="text-xs text-ink-muted">Estimated browsers active on public pages in the last minute. Updates every 10 seconds.</p>
     </section>
   );
 }

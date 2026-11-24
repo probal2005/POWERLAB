@@ -36,7 +36,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
   const location = useLocation();
   const { lawSlug } = useParams<{ lawSlug: string }>();
   const { t, tx, language } = useLanguage();
-  const { laws, loading, error: contentError } = useContent();
+  const { laws, loading, error: contentError, refresh } = useContent();
   const { user, loading: authLoading } = useAuth();
 
   const law = final
@@ -49,6 +49,9 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
 
   const assessment = law?.assessment;
   const questions: AssessmentQuestion[] = assessment?.questions ?? [];
+  const revision = law?.assessmentRevision;
+  const draftKey = revision && lawSlug ? `powerlab:quiz-draft:${lawSlug}:${revision}` : null;
+  const questionCount = questions.length;
   const isAssessmentPublished =
     !final &&
     law?.isPublished !== false &&
@@ -70,11 +73,23 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
   const [history, setHistory] = useState<AssessmentAttempt[]>([]);
 
   useEffect(() => {
-    setCurrentQuestion(0);
-    setAnswers(Array(questions.length).fill(-1));
+    const next = Array<number>(questionCount).fill(-1);
+    let index = 0;
+    if (draftKey) {
+      try {
+        const draft = JSON.parse(sessionStorage.getItem(draftKey) ?? 'null') as { answers?: number[]; index?: number } | null;
+        if (draft?.answers?.length === questionCount && draft.answers.every((value) => Number.isInteger(value) && value >= -1 && value <= 3)) {
+          next.splice(0, questionCount, ...draft.answers);
+          if (typeof draft.index === 'number' && Number.isInteger(draft.index) && draft.index >= 0 && draft.index < questionCount) index = draft.index;
+        }
+      } catch { /* Storage may be unavailable. */ }
+    }
+    setCurrentQuestion(index);
+    setAnswers(next);
     setResult(null);
-    setHistory([]);
-  }, [lawSlug, final, questions.length]);
+  }, [draftKey, lawSlug, final, questionCount]);
+
+  useEffect(() => { setHistory([]); }, [lawSlug, user?.id]);
 
   useEffect(() => {
     if (!user || !lawSlug || final) return;
@@ -116,13 +131,24 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
       return;
     }
 
+    if (!revision) {
+      setSubmitError(t('Reload this quiz before submitting.', 'জমা দেওয়ার আগে কুইজটি আবার লোড করুন।'));
+      await refresh();
+      return;
+    }
     setSubmitting(true);
     setSubmitError('');
-    const { data, error } = await supabase.rpc('submit_law_assessment', {
+    const { data, error } = await supabase.rpc('submit_powerlab_quiz', {
       p_law_slug: law.slug,
       p_answers: answers,
+      p_revision: revision,
     });
     setSubmitting(false);
+    if (error?.code === 'PT409') {
+      setSubmitError(t('This quiz changed. Review the updated questions before submitting again.', 'কুইজটি বদলেছে। আবার জমা দেওয়ার আগে হালনাগাদ প্রশ্নগুলো দেখুন।'));
+      await refresh();
+      return;
+    }
     if (error) {
       setSubmitError(t('Could not submit the assessment. Please try again.', 'মূল্যায়ন জমা দেওয়া যায়নি। আবার চেষ্টা করুন।'));
       return;
@@ -133,6 +159,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
     }
     saved.reviewCorrect = saved.review?.map((item) => item.correct) ?? saved.reviewCorrect;
     const attempt: AssessmentAttempt = { ...saved, lawSlug: law.slug };
+    try { if (draftKey) sessionStorage.removeItem(draftKey); } catch { /* Storage is optional. */ }
     setResult(attempt);
     setHistory((previous) => [attempt, ...previous].slice(0, 20));
   };
@@ -425,7 +452,11 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                         <ArrowRight className="h-4 w-4" />
                       </button>
                     ) : !user && !authLoading ? (
-                      <Link className="btn-primary" to="/login" state={{ from: location }}>
+                      <Link className="btn-primary" to="/login" state={{ from: location }} onClick={() => {
+                        try {
+                          if (draftKey) sessionStorage.setItem(draftKey, JSON.stringify({ answers, index: currentQuestion }));
+                        } catch { /* Storage is optional. */ }
+                      }}>
                         {t('Sign in to submit', 'জমা দিতে সাইন ইন করুন')}
                       </Link>
                     ) : (

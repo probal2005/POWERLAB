@@ -20,7 +20,7 @@ type ContentContextValue = {
 
 const ContentContext = createContext<ContentContextValue | undefined>(undefined);
 type ContentPayload = { laws: Law[]; categories: Category[] };
-const CONTENT_CACHE_KEY = 'powerlab:shared-content:v3';
+const CONTENT_CACHE_KEY = 'powerlab:shared-content:v4';
 
 function readCachedContent(): ContentPayload | null {
   try {
@@ -40,7 +40,8 @@ function fromDatabase(row: Record<string, unknown>): Law {
     titleEn: String(row.title_en), titleBn: String(row.title_bn),
     shortEn: String(row.short_en ?? ''), shortBn: String(row.short_bn ?? ''),
     category: String(row.category_id), sections: (row.sections ?? []) as LawSection[],
-    assessment: row.assessment as Law['assessment'], isPublished: Boolean(row.is_published),
+    assessment: row.assessment as Law['assessment'],
+    assessmentRevision: typeof row.assessment_revision === 'string' ? row.assessment_revision : undefined, isPublished: Boolean(row.is_published),
   };
 }
 

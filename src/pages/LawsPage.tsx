@@ -87,6 +87,7 @@ export default function LawsPage() {
               onClick={() => setShowFilters((o) => !o)}
               className={`btn-ghost border border-line px-3.5 ${showFilters ? 'text-forest-600 border-forest-300' : ''}`}
               aria-expanded={showFilters}
+              aria-label={t('Filters', 'ফিল্টার')}
             >
               <SlidersHorizontal className="h-4 w-4" />
               <span className="hidden sm:inline">{t('Filters', 'ফিল্টার')}</span>

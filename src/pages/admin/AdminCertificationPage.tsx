@@ -21,6 +21,7 @@ export default function AdminCertificationPage() {
   const [settings, setSettings] = useState<CertificationProgramSettings | null>(null);
   const [questions, setQuestions] = useState<CertificationAdminQuestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [passDraft, setPassDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -58,7 +59,7 @@ export default function AdminCertificationPage() {
   }
 
   async function saveSettings(patch: Partial<CertificationProgramSettings>) {
-    if (!settings) return;
+    if (!settings || saving) return;
     const next = { ...settings, ...patch };
     if (patch.programme_enabled || patch.final_assessment_published) {
       const [moduleResult, questionResult] = await Promise.all([
@@ -73,8 +74,8 @@ export default function AdminCertificationPage() {
     if (next.programme_enabled && !next.final_assessment_published) { setError('Publish the final assessment before enabling certification.'); return; }
     setSaving(true); setError(''); setNotice('');
     const { data: authData } = await supabase.auth.getUser();
-    const { error: saveError } = await supabase.from('certification_program_settings').update({ programme_enabled: next.programme_enabled, final_assessment_published: next.final_assessment_published, pass_percentage: next.pass_percentage, updated_by: authData.user?.id ?? null }).eq('id', true);
-    if (saveError) setError(saveError.message); else { setSettings(next); setNotice('Certification settings saved.'); }
+    const { data: savedSettings, error: saveError } = await supabase.from('certification_program_settings').update({ ...patch, updated_by: authData.user?.id ?? null, updated_at: new Date().toISOString() }).eq('id', true).select('*').single<CertificationProgramSettings>();
+    if (saveError) setError(saveError.message); else { setSettings(savedSettings); if (patch.pass_percentage !== undefined) setPassDraft(null); setNotice('Certification settings saved.'); }
     setSaving(false);
   }
 
@@ -126,7 +127,17 @@ export default function AdminCertificationPage() {
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`border p-4 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || notice}</p>}
     <CertificateManagement />
     <section className="grid gap-4 sm:grid-cols-3"><Metric label="Approved modules" value={`${readyCount}/48`} /><Metric label="Active final questions" value={activeCount} /><Metric label="Programme" value={settings?.programme_enabled ? 'Enabled' : 'Disabled'} /></section>
-    {settings && <section className="space-y-4 border border-line bg-surface p-5 sm:p-7"><div><h2 className="font-display text-xl text-ink">Programme settings</h2><p className="mt-1 text-sm text-ink-muted">Publishing and programme activation remain blocked until every module and question is ready.</p></div><label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={settings.final_assessment_published} disabled={saving} onChange={(event) => void saveSettings({ final_assessment_published: event.target.checked })} /> Publish final assessment</label><label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={settings.programme_enabled} disabled={saving} onChange={(event) => void saveSettings({ programme_enabled: event.target.checked })} /> Enable certification programme</label><label className="block max-w-xs text-xs font-semibold text-ink-muted">Passing score (%)<input className="field-input mt-1" type="number" min="1" max="100" value={settings.pass_percentage} disabled={saving} onChange={(event) => setSettings({ ...settings, pass_percentage: Number(event.target.value) })} onBlur={() => void saveSettings({ pass_percentage: settings.pass_percentage })} /></label></section>}
+    {settings && <section className="space-y-4 border border-line bg-surface p-5 sm:p-7"><div><h2 className="font-display text-xl text-ink">Programme settings</h2><p className="mt-1 text-sm text-ink-muted">Publishing and programme activation remain blocked until every module and question is ready.</p></div><label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={settings.final_assessment_published} disabled={saving} onChange={(event) => void saveSettings({ final_assessment_published: event.target.checked })} /> Publish final assessment</label><label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={settings.programme_enabled} disabled={saving} onChange={(event) => void saveSettings({ programme_enabled: event.target.checked })} /> Enable certification programme</label><form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
+          event.preventDefault();
+          const value = Number(passDraft);
+          if (passDraft !== null && Number.isInteger(value) && value >= 1 && value <= 100) void saveSettings({ pass_percentage: value });
+        }}>
+          <label className="block max-w-xs text-xs font-semibold text-ink-muted">Passing score (%)
+            <input className="field-input mt-1" type="number" min={1} max={100} step={1} required
+              value={passDraft ?? settings.pass_percentage} disabled={saving} onChange={(event) => setPassDraft(event.target.value)} />
+          </label>
+          <button type="submit" className="btn-secondary" disabled={saving || passDraft === null}>Save passing score</button>
+        </form></section>}
     <section className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-display text-xl text-ink">Module review</h2><p className="mt-1 text-sm text-ink-muted">A module can be approved only when its published lesson has real sections.</p></div><Link to="/admin/laws" className="btn-secondary">Review law content</Link></div><div className="divide-y divide-line border border-line bg-surface">{modules.map((module) => { const law = laws.find((item) => item.slug === module.law_slug); const hasContent = Boolean(law && law.isPublished !== false && law.sections?.length); return <div key={module.law_slug} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-ink">Law {String(module.law_number).padStart(2, '0')}: {law?.titleEn ?? module.law_slug}</p><p className="mt-1 text-xs text-ink-muted">{hasContent ? `${law?.sections?.length} lesson sections` : 'Published lesson content is incomplete'} · {module.is_ready ? `Approved ${module.reviewed_at ? new Date(module.reviewed_at).toLocaleDateString() : ''}` : 'Not approved'}</p></div><button type="button" className={module.is_ready ? 'btn-secondary' : 'btn-primary'} disabled={saving || (!module.is_ready && !hasContent)} onClick={() => void setModuleReady(module, !module.is_ready)}>{module.is_ready ? 'Remove approval' : 'Approve module'}</button></div>; })}</div></section>
     <section className="space-y-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-display text-xl text-ink">Final question bank</h2><p className="mt-1 text-sm text-ink-muted">Answers and explanations stay private and are used only by secure server-side grading.</p></div><button type="button" className="btn-primary" disabled={saving} onClick={() => void addQuestion()}><Plus size={16} /> Add question</button></div>{questions.length === 0 ? <div className="flex items-start gap-3 border border-bronze-200 bg-bronze-50 p-4 text-sm text-ink-muted"><AlertTriangle size={18} className="mt-0.5 shrink-0 text-bronze-700" /><p>No question bank exists yet. Add reviewed bilingual questions before publication.</p></div> : questions.map((question, index) => <QuestionEditor key={question.id} question={question} index={index} saving={saving} onChange={(patch) => editQuestion(question.id, patch)} onSave={() => void saveQuestion(question)} onDelete={() => void deleteQuestion(question)} />)}</section>
   </div>;

@@ -23,7 +23,7 @@ export default function LoginPage() {
       const allowed = path === destination ||
         (profile.role === 'admin' && path.startsWith('/admin/')) ||
         (profile.role === 'student' && (
-          path === '/certification' || /^\/assessment\/[a-z0-9-]+$/.test(path)
+          path === '/certification' || path === '/student/review' || /^\/assessment\/[a-z0-9-]+$/.test(path)
         ));
       navigate(allowed ? { pathname: path, search: from?.search ?? '' } : destination, { replace: true });
     }

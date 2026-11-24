@@ -41,13 +41,16 @@ begin
   assert public.get_powerlab_public_translations('xx') = '{"ui:Explore":"Translated"}';
   assert not has_function_privilege(current_user, 'public.get_powerlab_final_translations(text)', 'execute');
   assert not has_function_privilege(current_user, 'public.submit_law_assessment(text,jsonb)', 'execute');
+  assert not has_function_privilege(current_user, 'public.get_powerlab_viewer_count()', 'execute');
+  perform public.record_powerlab_viewer('00000000-0000-4000-8000-00000000feed');
+  perform public.record_powerlab_viewer('00000000-0000-4000-8000-00000000feed');
 end;
 $$;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', true);
 do $$
-declare result jsonb;
+declare result jsonb; revision uuid;
 begin
   assert (select role from public.profiles) = 'student';
   assert (select count(*) from public.student_bookmarks) = 0;
@@ -64,7 +67,20 @@ begin
     raise exception 'Student could change roles';
   exception when insufficient_privilege then null;
   end;
-  result := public.submit_law_assessment('never-outshine-the-master', '[0,2,0]');
+  begin
+    perform public.get_powerlab_viewer_count();
+    raise exception 'Student could read viewer statistics';
+  exception when insufficient_privilege then null;
+  end;
+  select (l->>'assessment_revision')::uuid into revision
+  from jsonb_array_elements(public.get_powerlab_public_content()->'laws') l
+  where l->>'slug' = 'never-outshine-the-master';
+  begin
+    perform public.submit_powerlab_quiz('never-outshine-the-master', '[0,2,0]', gen_random_uuid());
+    raise exception 'Outdated quiz submission was graded';
+  exception when sqlstate 'PT409' then null;
+  end;
+  result := public.submit_powerlab_quiz('never-outshine-the-master', '[0,2,0]', revision);
   assert (result->>'passed')::boolean and (result->>'percentage')::int = 67;
   assert jsonb_array_length(result->'review') = 3;
   result := public.submit_law_assessment('never-outshine-the-master', '[0,0,0]');
@@ -93,6 +109,7 @@ select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000002
 do $$
 begin
   assert not exists (select 1 from public.student_lesson_notes);
+  assert (public.get_powerlab_viewer_count()->>'count')::integer >= 1;
   assert jsonb_array_length(public.get_powerlab_assessment_analytics()->'laws') = 48;
   assert jsonb_array_length(public.get_powerlab_assessment_analytics()->'questions') = 2;
   assert jsonb_path_exists(public.get_powerlab_admin_content(), '$.laws[*].assessment.questions[*].correctOption');
