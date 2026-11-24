@@ -85,6 +85,8 @@ export interface CertificateDesign {
   title_bn: string;
   subtitle_en: string;
   subtitle_bn: string;
+  qualification_en: string;
+  qualification_bn: string;
   accent: string;
   frame: 'modern' | 'classic' | 'minimal';
   partner_name: string;

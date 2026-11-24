@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ImagePlus, Save } from 'lucide-react';
 import IssuedCertificate from '@/components/IssuedCertificate';
 import { supabase } from '@/lib/supabase';
 import type { CertificateDesign } from '@/types/certification';
 
-const designColumns = 'title_en,title_bn,subtitle_en,subtitle_bn,accent,frame,partner_name,partner_logo';
+const designColumns = 'title_en,title_bn,subtitle_en,subtitle_bn,qualification_en,qualification_bn,accent,frame,partner_name,partner_logo';
 const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
 const maxLogoBytes = 256 * 1024;
 
@@ -13,6 +13,8 @@ const textFields = [
   { key: 'title_bn', label: 'Title (বাংলা)', maxlength: 100, lang: 'bn' },
   { key: 'subtitle_en', label: 'Subtitle (English)', maxlength: 160, lang: 'en' },
   { key: 'subtitle_bn', label: 'Subtitle (বাংলা)', maxlength: 160, lang: 'bn' },
+  { key: 'qualification_en', label: 'Course or award name (English)', maxlength: 120, lang: 'en' },
+  { key: 'qualification_bn', label: 'Course or award name (বাংলা)', maxlength: 120, lang: 'bn' },
 ] as const;
 
 function readLogo(file: File): Promise<string> {
@@ -32,17 +34,23 @@ export default function CertificateDesignEditor() {
   const [loadingLogo, setLoadingLogo] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [loadVersion, setLoadVersion] = useState(0);
+  const section = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (window.location.hash === '#certificate-design') section.current?.scrollIntoView();
+  }, []);
 
   useEffect(() => {
     const request = new AbortController();
     void supabase.from('certificate_design').select(designColumns).eq('id', true)
       .abortSignal(request.signal).single<CertificateDesign>().then(({ data, error }) => {
         if (request.signal.aborted) return;
-        if (error || !data) setError('The published design could not be loaded. Refresh and try again.');
+        if (error || !data) setError('The published certificate content could not be loaded.');
         else { setDraft(data); setPublished(data); }
       });
     return () => request.abort();
-  }, []);
+  }, [loadVersion]);
 
   function change<K extends keyof CertificateDesign>(key: K, value: CertificateDesign[K]) {
     setNotice('');
@@ -84,6 +92,8 @@ export default function CertificateDesignEditor() {
       title_bn: draft.title_bn.trim(),
       subtitle_en: draft.subtitle_en.trim(),
       subtitle_bn: draft.subtitle_bn.trim(),
+      qualification_en: draft.qualification_en.trim(),
+      qualification_bn: draft.qualification_bn.trim(),
       partner_name: draft.partner_name.trim(),
     };
     setError('');
@@ -117,25 +127,30 @@ export default function CertificateDesignEditor() {
   });
 
   return (
-    <section id="certificate-design" className="scroll-mt-24 space-y-5 border border-line bg-surface p-5 sm:p-7" aria-labelledby="certificate-design-title">
+    <section ref={section} id="certificate-design" className="scroll-mt-24 space-y-5 border border-line bg-surface p-5 sm:p-7" aria-labelledby="certificate-design-title">
       <div>
-        <h2 id="certificate-design-title" className="font-display text-xl text-ink">Certificate design</h2>
-        <p className="mt-2 text-sm text-ink-muted">Edit the design used for future certificates. Published changes apply at issuance.</p>
+        <h2 id="certificate-design-title" className="font-display text-xl text-ink">Certificate content and design</h2>
+        <p className="mt-2 text-sm text-ink-muted">Edit the title, subtitle, and course or award name for future certificates. Leave the award name blank to use the default.</p>
       </div>
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {notice && <p role="status" className="border border-forest-200 bg-forest-50 p-3 text-sm text-forest-800">{notice}</p>}
+      {!draft && error && (
+        <button type="button" className="btn-secondary" onClick={() => { setError(''); setLoadVersion((version) => version + 1); }}>Retry loading certificate content</button>
+      )}
       {!draft && !error && <p role="status" className="text-sm text-ink-muted">Loading certificate design…</p>}
       {draft && (
         <div className="grid gap-6 2xl:grid-cols-2">
           <form onSubmit={(event) => void publish(event)} className="min-w-0">
             <fieldset disabled={busy || loadingLogo} className="min-w-0 space-y-4">
-              <legend className="sr-only">Certificate formatting</legend>
+              <legend className="mb-2 text-sm font-semibold text-ink">Certificate text</legend>
               <div className="grid gap-4 sm:grid-cols-2">
                 {textFields.map(({ key, label, maxlength, lang }) => (
                   <label key={key} className="min-w-0 text-sm">{label}
                     <input className="field-input mt-1" lang={lang} maxLength={maxlength} value={draft[key]} onChange={(event) => change(key, event.target.value)} />
                   </label>
                 ))}
+              </div>
+              <div className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
                 <label className="text-sm">Template
                   <select className="field-input mt-1" value={draft.frame} onChange={(event) => change('frame', event.target.value as CertificateDesign['frame'])}>
                     <option value="modern">Modern landscape</option>

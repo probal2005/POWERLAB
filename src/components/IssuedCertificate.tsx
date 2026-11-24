@@ -20,6 +20,10 @@ export default function IssuedCertificate({ certificate, recipient, previewLangu
   const design = certificate.design_snapshot;
   const title = t(design?.title_en || 'Certificate of completion', design?.title_bn || 'পাঠ সমাপ্তির সার্টিফিকেট');
   const subtitle = t(design?.subtitle_en ?? '', design?.subtitle_bn ?? '');
+  const qualification = t(
+    design?.qualification_en || certificate.qualification,
+    design?.qualification_bn || certificate.qualification,
+  );
   const minimal = design?.frame === 'minimal';
   const modern = design?.frame === 'modern';
   const verifyPath = `/verify-certificate?id=${encodeURIComponent(certificate.certificate_id)}`;
@@ -52,7 +56,7 @@ export default function IssuedCertificate({ certificate, recipient, previewLangu
         </h2>
         {subtitle && <p className="mt-2 break-words text-sm text-ink-muted">{subtitle}</p>}
         {recipient && <p className={modern ? 'certificate-modern-recipient font-display' : 'mt-4 break-words font-display text-xl text-ink'}>{recipient}</p>}
-        <p className={modern ? 'certificate-modern-qualification' : 'mt-2 text-sm text-ink-muted'}>{certificate.qualification}</p>
+        <p className={modern ? 'certificate-modern-qualification' : 'mt-2 break-words text-sm text-ink-muted'}>{qualification}</p>
         <dl className={modern ? 'certificate-modern-details' : 'mt-5 space-y-2 text-sm'}>
           <div>
             <dt className="font-semibold">{t('Certificate ID', 'সার্টিফিকেট আইডি')}</dt>
