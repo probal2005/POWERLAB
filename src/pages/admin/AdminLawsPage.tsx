@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -104,8 +105,10 @@ const fieldClass =
 const labelClass = 'block text-xs font-semibold text-ink-muted';
 
 export default function AdminLawsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     laws,
+    loading,
     categories,
     addLaw,
     updateLaw,
@@ -174,6 +177,21 @@ export default function AdminLawsPage() {
     setError('');
     setEditor(toEditorState(law));
   };
+
+  useEffect(() => {
+    const slug = searchParams.get('assessment');
+    if (!slug || loading) return;
+    const law = laws.find((item) => item.slug === slug);
+    if (law) {
+      setError('');
+      setEditor(toEditorState(law));
+    } else {
+      setError('The assessment could not be opened. Confirm the law is available and try again.');
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('assessment');
+    setSearchParams(next, { replace: true });
+  }, [laws, loading, searchParams, setSearchParams]);
 
   const updateEditor = <K extends keyof EditorState>(
     key: K,
