@@ -34,7 +34,7 @@ export default function LearningReviewPage() {
     return () => controller.abort();
   }, []);
 
-  return <main className="container-content space-y-7 py-12">
+  return <div className="space-y-7">
     <Link to="/student" className="btn-secondary">{t('Back to dashboard', 'ড্যাশবোর্ডে ফিরে যান')}</Link>
     <h1 className="font-display text-3xl text-ink">{t('Learning review', 'পাঠ পর্যালোচনা')}</h1>
     {error && <p role="alert" className="text-sm text-red-800">{t('Some learning data could not be loaded.', 'কিছু তথ্য লোড করা যায়নি।')}</p>}
@@ -60,5 +60,5 @@ export default function LearningReviewPage() {
         </article>;
       })}
     </section>
-  </main>;
+  </div>;
 }

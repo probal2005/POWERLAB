@@ -24,7 +24,7 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
 const PasswordRecoveryPage = lazy(() => import('@/pages/PasswordRecoveryPage'));
 const LearningReviewPage = lazy(() => import('@/pages/LearningReviewPage'));
-const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'));
+const WorkspaceLayout = lazy(() => import('@/components/WorkspaceLayout'));
 const AdminDashboardPage = lazy(
   () => import('@/pages/admin/AdminDashboardPage')
 );
@@ -94,17 +94,16 @@ export default function App() {
                 </Route>
 
                 <Route element={<ProtectedRoute requiredRole="student" />}>
-                  <Route
-                    path="/student"
-                    element={<StudentDashboardPage />}
-                  />
-                  <Route path="/student/review" element={<LearningReviewPage />} />
-                  <Route path="/certification" element={<CertificationPage />} />
-                  <Route path="/assessment/final" element={<CertificationPage />} />
+                  <Route element={<WorkspaceLayout role="student" />}>
+                    <Route path="/student" element={<StudentDashboardPage />} />
+                    <Route path="/student/review" element={<LearningReviewPage />} />
+                    <Route path="/certification" element={<CertificationPage />} />
+                    <Route path="/assessment/final" element={<CertificationPage />} />
+                  </Route>
                 </Route>
 
                 <Route element={<ProtectedRoute requiredRole="admin" />}>
-                  <Route path="/admin" element={<ContentProvider admin><AdminLayout /></ContentProvider>}>
+                  <Route path="/admin" element={<ContentProvider admin><WorkspaceLayout role="admin" /></ContentProvider>}>
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="laws" element={<AdminLawsPage />} />
                     <Route path="certification" element={<AdminCertificationPage />} />
