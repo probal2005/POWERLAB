@@ -1,6 +1,7 @@
+import IssuedCertificate from '@/components/IssuedCertificate';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Award, BookOpen, LockKeyhole } from 'lucide-react';
+import { BookOpen, LockKeyhole } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useContent } from '@/context/ContentContext';
 import { supabase } from '@/lib/supabase';
@@ -11,7 +12,7 @@ function optionList(value: unknown): string[] { return Array.isArray(value) ? va
 
 export default function CertificationPage() {
   const { language, t, tx } = useLanguage();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { laws } = useContent();
   const [status, setStatus] = useState<CertificationStudentStatus | null>(null);
   const [questions, setQuestions] = useState<CertificationFinalQuestion[]>([]);
@@ -44,8 +45,14 @@ export default function CertificationPage() {
   const completedSet = useMemo(() => new Set(status?.completed_law_slugs ?? []), [status]);
   const eligibleForFinal = Boolean(status?.programme_enabled && status.final_assessment_published && allReady && completedSet.size === 48);
 
+  const canClaim = Boolean(eligibleForFinal && status?.latest_attempt?.passed &&
+    status.latest_attempt.assessment_version === status.assessment_version);
+  const examVersion = status?.assessment_version;
+
   useEffect(() => {
-    if (!eligibleForFinal || questions.length || !user) return;
+    setQuestions([]);
+    setAnswers({});
+    if (!eligibleForFinal || canClaim || certificate || !user) return;
     let active = true;
     void supabase.rpc('get_certification_final_questions').then(({ data, error: loadError }) => {
       if (!active) return;
@@ -53,7 +60,7 @@ export default function CertificationPage() {
       else setQuestions((data ?? []) as CertificationFinalQuestion[]);
     });
     return () => { active = false; };
-  }, [eligibleForFinal, questions.length, user]);
+  }, [eligibleForFinal, examVersion, canClaim, certificate, user]);
 
   useEffect(() => {
     setFinalTranslations({});
@@ -97,14 +104,21 @@ export default function CertificationPage() {
   if (loading) return <div className="container-content py-20 text-sm text-ink-muted" role="status">{t('Loading certification status…', 'সার্টিফিকেশনের অবস্থা লোড হচ্ছে…')}</div>;
 
   return <main className={`container-content min-h-[70vh] py-12 md:py-16 ${language === 'bn' ? 'font-bengali' : ''}`}><header className="border-b border-line pb-8"><p className="eyebrow text-bronze-600">{t('POWERLAB Certification', 'POWERLAB সার্টিফিকেশন')}</p><h1 className="mt-3 font-display text-3xl text-ink sm:text-4xl">{t('Master the 48 Laws', '৪৮টি নিয়মে দক্ষতা অর্জন করুন')}</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">{t('Complete approved lessons, pass the final assessment, and earn a verifiable certificate.', 'অনুমোদিত পাঠ সম্পন্ন করুন, চূড়ান্ত মূল্যায়নে উত্তীর্ণ হন এবং যাচাইযোগ্য সার্টিফিকেট অর্জন করুন।')}</p></header>
+    <Link to="/student" className="btn-ghost mt-4">{t('Back to student dashboard', 'শিক্ষার্থী ড্যাশবোর্ডে ফিরে যান')}</Link>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`mt-6 border p-4 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || notice}</p>}
     {!status ? <p className="mt-8 text-sm text-ink-muted">{t('Certification status is unavailable right now. Refresh to try again.', 'সার্টিফিকেশনের অবস্থা এখন পাওয়া যাচ্ছে না। আবার লোড করুন।')}</p> : <>
       <section className="mt-8 grid gap-4 sm:grid-cols-3"><Metric label={t('Approved modules', 'অনুমোদিত মডিউল')} value={`${status.modules.filter((module) => module.is_ready).length}/48`} /><Metric label={t('Modules completed', 'সম্পন্ন মডিউল')} value={`${completedSet.size}/48`} /><Metric label={t('Passing score', 'পাস নম্বর')} value={`${status.pass_percentage}%`} /></section>
-      {certificate ? <section className="mt-8 border border-forest-200 bg-forest-50 p-6"><Award size={26} className="text-forest-700" /><h2 className="mt-3 font-display text-2xl text-ink">{t('Certificate issued', 'সার্টিফিকেট ইস্যু করা হয়েছে')}</h2><p className="mt-2 text-sm text-ink-muted">{certificate.qualification} · {certificate.certificate_id}</p><p className="mt-2 text-sm text-ink-muted">{t('Status:', 'অবস্থা:')} {certificate.status}</p><Link className="btn-primary mt-5" to={`/verify-certificate?id=${encodeURIComponent(certificate.certificate_id)}`}>{t('Verify certificate', 'সার্টিফিকেট যাচাই করুন')}</Link></section> : null}
+      {certificate && <IssuedCertificate certificate={certificate} recipient={profile?.full_name ?? ''} />}
+      {canClaim && !certificate && <section className="mt-8 border border-forest-200 bg-forest-50 p-6">
+        <h2 className="font-display text-xl">{t('Your certificate is ready to claim', 'আপনার সার্টিফিকেট সংগ্রহের জন্য প্রস্তুত')}</h2>
+        <button type="button" className="btn-primary mt-4" disabled={saving} onClick={() => void issueCertificate()}>
+          {t('Claim certificate', 'সার্টিফিকেট সংগ্রহ করুন')}
+        </button>
+      </section>}
       {status.latest_attempt && <section className="mt-8 border border-line bg-surface p-6"><h2 className="font-display text-xl text-ink">{t('Latest final assessment', 'সর্বশেষ চূড়ান্ত মূল্যায়ন')}</h2><p className="mt-3 text-sm text-ink-muted">{status.latest_attempt.score}/{status.latest_attempt.total_questions} · {status.latest_attempt.percentage}% · {status.latest_attempt.passed ? t('Passed', 'উত্তীর্ণ') : t('Not passed', 'উত্তীর্ণ হননি')}</p></section>}
       {!status.programme_enabled && <section className="mt-8 flex gap-3 border border-bronze-200 bg-bronze-50 p-5"><LockKeyhole className="mt-0.5 shrink-0 text-bronze-700" /><div><h2 className="font-semibold text-ink">{t('Certification is not open yet', 'সার্টিফিকেশন এখনো চালু হয়নি')}</h2><p className="mt-1 text-sm leading-relaxed text-ink-muted">{t('The administrator must review all course modules and publish the final question bank first. Your existing lessons remain available.', 'প্রশাসককে আগে সব কোর্স মডিউল পর্যালোচনা করে চূড়ান্ত প্রশ্ন প্রকাশ করতে হবে। আপনার পাঠগুলো পড়ার জন্য খোলা আছে।')}</p></div></section>}
       <section className="mt-8"><div className="flex items-end justify-between gap-4"><div><h2 className="font-display text-xl text-ink">{t('Course modules', 'কোর্স মডিউল')}</h2><p className="mt-1 text-sm text-ink-muted">{t('Module completion is recorded only after the lesson itself is marked complete.', 'পাঠ সম্পন্ন হিসেবে চিহ্নিত করলেই মডিউল সম্পন্ন হিসেবে গণ্য হবে।')}</p></div><Link to="/laws" className="btn-secondary"><BookOpen size={15} /> {t('Explore lessons', 'পাঠগুলো দেখুন')}</Link></div><div className="mt-4 divide-y divide-line border border-line bg-surface">{status.modules.map((module) => { const law = laws.find((item) => item.slug === module.law_slug); const completed = completedSet.has(module.law_slug); return <div key={module.law_slug} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-ink">{t(`Law ${String(module.law_number).padStart(2, '0')}`, `নিয়ম ${String(module.law_number).padStart(2, '0')}`)}: {law ? tx(`law:${law.slug}:title`, law.titleEn, law.titleBn) : module.law_slug}</p><p className="mt-1 text-xs text-ink-muted">{!module.is_ready ? t('Not yet approved for certification', 'সার্টিফিকেশনের জন্য এখনো অনুমোদিত নয়') : completed ? t('Completed', 'সম্পন্ন') : t('Approved module', 'অনুমোদিত মডিউল')}</p></div>{law && <div className="flex gap-2">{module.is_ready && !completed && <button type="button" className="btn-secondary" disabled={saving} onClick={() => void markComplete(module.law_slug)}>{t('Confirm complete', 'সম্পন্ন নিশ্চিত করুন')}</button>}<Link className="btn-ghost" to={`/laws/${law.slug}`}>{t('Open lesson', 'পাঠ খুলুন')}</Link></div>}</div>; })}</div></section>
-      {eligibleForFinal && !certificate && <section className="mt-10 border-t border-line pt-8"><h2 className="font-display text-2xl text-ink">{t('Final assessment', 'চূড়ান্ত মূল্যায়ন')}</h2>{attempt && <p className="mt-2 text-sm text-ink-muted">{t(`You scored ${attempt.percentage}%.`, `আপনার স্কোর ${attempt.percentage}%.`)} {attempt.passed ? t('You passed.', 'আপনি উত্তীর্ণ হয়েছেন।') : t('Review the lessons and try again.', 'পাঠগুলো আবার পড়ে চেষ্টা করুন।')}</p>}{questions.length === 0 ? <p className="mt-4 text-sm text-ink-muted">{t('No published questions are available.', 'কোনো প্রকাশিত প্রশ্ন নেই।')}</p> : <div className="mt-5 space-y-5">{questions.map((question, index) => { const englishChoices = optionList(question.options_en); const bengaliChoices = optionList(question.options_bn); const choices = language === 'bn' ? bengaliChoices : englishChoices; return <fieldset key={question.id} className="border border-line bg-surface p-5"><legend className="px-1 text-sm font-semibold text-ink">{index + 1}. {finalTranslations[`final:assessment:${question.id}:question`] ?? (language === 'bn' ? question.question_bn : question.question_en)}</legend><div className="mt-4 space-y-2">{choices.map((choice, choiceIndex) => { const translatedChoice = language === 'en' || language === 'bn' ? choice : finalTranslations[`final:assessment:${question.id}:option:${choiceIndex}`] ?? choice; return <label key={choiceIndex} className="flex cursor-pointer items-start gap-3 border border-line p-3 text-sm text-ink hover:border-forest-300"><input className="mt-1" type="radio" name={question.id} checked={answers[question.id] === choiceIndex} onChange={() => setAnswers((current) => ({ ...current, [question.id]: choiceIndex }))} /><span>{translatedChoice}</span></label>; })}</div></fieldset>; })}<button type="button" className="btn-primary" disabled={saving} onClick={() => void submitAssessment()}>{saving ? t('Submitting…', 'জমা হচ্ছে…') : t('Submit assessment', 'মূল্যায়ন জমা দিন')}</button>{status.latest_attempt?.passed && status.latest_attempt.assessment_version === status.assessment_version && <button type="button" className="btn-secondary ml-3" disabled={saving} onClick={() => void issueCertificate()}>{t('Issue certificate', 'সার্টিফিকেট ইস্যু করুন')}</button>}</div>}</section>}
+      {eligibleForFinal && !certificate && !canClaim && <section className="mt-10 border-t border-line pt-8"><h2 className="font-display text-2xl text-ink">{t('Final assessment', 'চূড়ান্ত মূল্যায়ন')}</h2>{attempt && <p className="mt-2 text-sm text-ink-muted">{t(`You scored ${attempt.percentage}%.`, `আপনার স্কোর ${attempt.percentage}%.`)} {attempt.passed ? t('You passed.', 'আপনি উত্তীর্ণ হয়েছেন।') : t('Review the lessons and try again.', 'পাঠগুলো আবার পড়ে চেষ্টা করুন।')}</p>}{questions.length === 0 ? <p className="mt-4 text-sm text-ink-muted">{t('No published questions are available.', 'কোনো প্রকাশিত প্রশ্ন নেই।')}</p> : <div className="mt-5 space-y-5">{questions.map((question, index) => { const englishChoices = optionList(question.options_en); const bengaliChoices = optionList(question.options_bn); const choices = language === 'bn' ? bengaliChoices : englishChoices; return <fieldset key={question.id} className="border border-line bg-surface p-5"><legend className="px-1 text-sm font-semibold text-ink">{index + 1}. {finalTranslations[`final:assessment:${question.id}:question`] ?? (language === 'bn' ? question.question_bn : question.question_en)}</legend><div className="mt-4 space-y-2">{choices.map((choice, choiceIndex) => { const translatedChoice = language === 'en' || language === 'bn' ? choice : finalTranslations[`final:assessment:${question.id}:option:${choiceIndex}`] ?? choice; return <label key={choiceIndex} className="flex cursor-pointer items-start gap-3 border border-line p-3 text-sm text-ink hover:border-forest-300"><input className="mt-1" type="radio" name={question.id} checked={answers[question.id] === choiceIndex} onChange={() => setAnswers((current) => ({ ...current, [question.id]: choiceIndex }))} /><span>{translatedChoice}</span></label>; })}</div></fieldset>; })}<button type="button" className="btn-primary" disabled={saving || Object.keys(answers).length !== questions.length} onClick={() => void submitAssessment()}>{saving ? t('Submitting…', 'জমা হচ্ছে…') : t('Submit assessment', 'মূল্যায়ন জমা দিন')}</button></div>}</section>}
     </>}
   </main>;
 }

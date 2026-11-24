@@ -131,6 +131,12 @@ begin
   certificate := public.issue_powerlab_certificate();
   assert (select status from public.verify_powerlab_certificate(certificate->>'certificate_id')) = 'active';
   perform set_config('powerlab.test_certificate_id', certificate->>'certificate_id', true);
+  begin
+    perform public.revoke_powerlab_certificate(certificate->>'certificate_id', 'Audit student request');
+    raise exception 'Student was able to revoke a certificate';
+  exception when raise_exception then
+    assert sqlerrm = 'Administrator permission required.';
+  end;
 end;
 $$;
 
