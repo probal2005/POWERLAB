@@ -1,6 +1,6 @@
 // Google Cloud Translation NMT language catalogue.
 // https://cloud.google.com/translate/docs/languages
-export const googleTranslationLanguages = [
+export const languageChoices = [
   { code: "ab", name: "Abkhaz" },
   { code: "ace", name: "Acehnese" },
   { code: "ach", name: "Acholi" },
