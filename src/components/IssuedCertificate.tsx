@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import BrandLogo from '@/components/BrandLogo';
 import { useLanguage } from '@/context/LanguageContext';
@@ -21,6 +21,7 @@ export default function IssuedCertificate({ certificate, recipient, previewLangu
   const title = t(design?.title_en || 'Certificate of completion', design?.title_bn || 'পাঠ সমাপ্তির সার্টিফিকেট');
   const subtitle = t(design?.subtitle_en ?? '', design?.subtitle_bn ?? '');
   const minimal = design?.frame === 'minimal';
+  const modern = design?.frame === 'modern';
   const verifyPath = `/verify-certificate?id=${encodeURIComponent(certificate.certificate_id)}`;
   const verificationUrl = new URL(verifyPath, window.location.origin).href;
 
@@ -34,25 +35,25 @@ export default function IssuedCertificate({ certificate, recipient, previewLangu
   }
 
   return (
-    <section lang={language} className={`mt-8 border p-4 sm:p-8 ${active ? `${preview ? '' : 'printable-certificate'} border-forest-200 bg-surface` : 'border-red-200 bg-red-50'}`}>
+    <section lang={language} className={`mt-8 ${modern ? 'certificate-modern-document' : 'border p-4 sm:p-8'} ${active ? `${preview ? '' : 'printable-certificate'} ${modern ? '' : 'border-forest-200 bg-surface'}` : 'border-red-200 bg-red-50'}`}>
       <div
-        className={`${minimal ? 'border-t-4' : 'border border-bronze-400'} p-4 text-center sm:p-8`}
-        style={{ borderColor: design?.accent || undefined }}
+        className={modern ? 'certificate-modern' : `${minimal ? 'border-t-4' : 'border border-bronze-400'} p-4 text-center sm:p-8`}
+        style={modern ? { '--certificate-accent': design?.accent } as CSSProperties : { borderColor: design?.accent || undefined }}
       >
-        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        <div className={modern ? "certificate-modern-logos" : "flex flex-wrap items-center justify-center gap-x-5 gap-y-2"}>
           <BrandLogo variant="auth" />
           {design?.partner_logo && (
             <img src={design.partner_logo} alt={design.partner_name} className="h-14 w-28 object-contain" />
           )}
         </div>
-        {design?.partner_name && <p className="mt-3 break-words text-sm text-ink-muted">{t('In collaboration with', 'সহযোগিতায়')} {design.partner_name}</p>}
-        <h2 className="mt-4 break-words font-display text-2xl text-ink sm:text-3xl">
+        {design?.partner_name && <p className={modern ? 'certificate-modern-partner' : 'mt-3 break-words text-sm text-ink-muted'}>{t('In collaboration with', 'সহযোগিতায়')} {design.partner_name}</p>}
+        <h2 className={modern ? 'certificate-modern-title font-display' : 'mt-4 break-words font-display text-2xl text-ink sm:text-3xl'}>
           {active ? title : t('Certificate revoked', 'সার্টিফিকেট বাতিল হয়েছে')}
         </h2>
         {subtitle && <p className="mt-2 break-words text-sm text-ink-muted">{subtitle}</p>}
-        {recipient && <p className="mt-4 break-words font-display text-xl text-ink">{recipient}</p>}
-        <p className="mt-2 text-sm text-ink-muted">{certificate.qualification}</p>
-        <dl className="mt-5 space-y-2 text-sm">
+        {recipient && <p className={modern ? 'certificate-modern-recipient font-display' : 'mt-4 break-words font-display text-xl text-ink'}>{recipient}</p>}
+        <p className={modern ? 'certificate-modern-qualification' : 'mt-2 text-sm text-ink-muted'}>{certificate.qualification}</p>
+        <dl className={modern ? 'certificate-modern-details' : 'mt-5 space-y-2 text-sm'}>
           <div>
             <dt className="font-semibold">{t('Certificate ID', 'সার্টিফিকেট আইডি')}</dt>
             <dd className="break-all">{certificate.certificate_id}</dd>

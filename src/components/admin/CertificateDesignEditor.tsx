@@ -136,8 +136,9 @@ export default function CertificateDesignEditor() {
                     <input className="field-input mt-1" lang={lang} maxLength={maxlength} value={draft[key]} onChange={(event) => change(key, event.target.value)} />
                   </label>
                 ))}
-                <label className="text-sm">Frame
+                <label className="text-sm">Template
                   <select className="field-input mt-1" value={draft.frame} onChange={(event) => change('frame', event.target.value as CertificateDesign['frame'])}>
+                    <option value="modern">Modern landscape</option>
                     <option value="classic">Classic border</option>
                     <option value="minimal">Minimal top rule</option>
                   </select>

@@ -86,7 +86,7 @@ export interface CertificateDesign {
   subtitle_en: string;
   subtitle_bn: string;
   accent: string;
-  frame: 'classic' | 'minimal';
+  frame: 'modern' | 'classic' | 'minimal';
   partner_name: string;
   partner_logo: string;
 }

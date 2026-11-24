@@ -212,3 +212,113 @@
     break-inside: avoid;
   }
 }
+
+.certificate-modern-document {
+  container-type: inline-size;
+}
+
+.certificate-modern {
+  --certificate-accent: #a37139;
+  position: relative;
+  isolation: isolate;
+  text-align: center;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: #173528;
+  background: #faf8f1;
+  border: 1px solid #d7dfd4;
+  padding: clamp(1rem, 6cqw, 4rem) clamp(1rem, 9cqw, 6rem);
+}
+
+.certificate-modern::before,
+.certificate-modern::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: clamp(3.25rem, 16cqw, 11rem);
+  height: clamp(2.5rem, 10cqw, 7rem);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  background: linear-gradient(143deg, #143a2a 55%, #267253 55% 73%, var(--certificate-accent) 73%);
+  pointer-events: none;
+}
+
+.certificate-modern::before {
+  inset: 0 auto auto 0;
+}
+
+.certificate-modern::after {
+  inset: auto 0 0 auto;
+  transform: rotate(180deg);
+}
+
+.certificate-modern-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: clamp(.5rem, 4cqw, 2.5rem);
+}
+
+.certificate-modern-logos img {
+  width: clamp(5rem, 20cqw, 10rem);
+  height: clamp(2.75rem, 9cqw, 5rem);
+  object-fit: contain;
+}
+
+.certificate-modern-partner {
+  margin: .4rem 0 0;
+  font-size: .8rem;
+  color: #435e50;
+}
+
+.certificate-modern-title {
+  margin: clamp(.8rem, 3cqw, 2rem) 0 0;
+  line-height: 1.15;
+  font-size: clamp(1.25rem, 4.2cqw, 3rem);
+}
+
+.certificate-modern-recipient {
+  margin: clamp(.7rem, 3cqw, 1.8rem) 0 0;
+  line-height: 1.12;
+  font-size: clamp(1.65rem, 6cqw, 4.15rem);
+}
+
+.certificate-modern-qualification {
+  margin: .75rem 0 0;
+  font-size: clamp(.78rem, 2cqw, 1.1rem);
+  color: #435e50;
+}
+
+.certificate-modern-details {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .75rem clamp(1.25rem, 8cqw, 4rem);
+  width: fit-content;
+  max-width: 100%;
+  border-top: 2px solid var(--certificate-accent);
+  margin: clamp(1rem, 4cqw, 2.25rem) auto 0;
+  padding: .75rem .25rem 0;
+  color: #435e50;
+  font-size: clamp(.75rem, 1.6cqw, .95rem);
+}
+
+@page powerlab-certificate {
+  size: A4 landscape;
+  margin: 12mm;
+}
+
+@media print {
+  .printable-certificate.certificate-modern-document {
+    page: powerlab-certificate;
+    container-type: normal;
+  }
+
+  .certificate-modern {
+    min-height: 174mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 12mm 20mm;
+  }
+}
