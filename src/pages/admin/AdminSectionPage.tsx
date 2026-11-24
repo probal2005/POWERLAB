@@ -143,10 +143,10 @@ function CategoryManager() {
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">Manage the shared bilingual categories used by the law library.</p>
       </div>
       <form onSubmit={createCategory} className="grid gap-3 border border-line bg-surface p-5 md:grid-cols-4">
-        <input aria-label="Category ID" className="field-input" placeholder="category-id" value={newId} onChange={(event) => setNewId(event.target.value)} />
-        <input aria-label="English label" className="field-input" placeholder="English label" value={newEn} onChange={(event) => setNewEn(event.target.value)} />
-        <input aria-label="Bengali label" className="field-input font-bengali" placeholder="বাংলা নাম" value={newBn} onChange={(event) => setNewBn(event.target.value)} />
-        <button type="submit" className="btn-primary"><Plus size={16} /> Add category</button>
+        <label className="min-w-0 text-sm">Category ID<input className="field-input mt-1" placeholder="category-id" value={newId} onChange={(event) => setNewId(event.target.value)} /></label>
+        <label className="min-w-0 text-sm">English label<input className="field-input mt-1" value={newEn} onChange={(event) => setNewEn(event.target.value)} /></label>
+        <label className="min-w-0 text-sm">Bengali label<input className="field-input mt-1 font-bengali" value={newBn} onChange={(event) => setNewBn(event.target.value)} /></label>
+        <button type="submit" className="btn-primary self-end"><Plus size={16} /> Add category</button>
       </form>
       {loading ? <p className="text-sm text-ink-muted">Loading categories…</p> : categories.map((category) => {
         const draft = drafts[category.id] ?? { en: category.labelEn, bn: category.labelBn };

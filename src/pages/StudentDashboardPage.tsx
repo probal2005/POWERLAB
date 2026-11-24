@@ -87,6 +87,21 @@ export default function StudentDashboardPage() {
         </p>
       </section>
 
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="border border-line bg-surface p-6 sm:p-8">
+          <div className="flex items-center justify-between gap-3"><h2 className="font-display text-xl text-ink">{t('Continue learning', 'শেখা চালিয়ে যান')}</h2><Clock3 size={19} className="text-forest-700" /></div>
+          {resumeLaw && lastPosition && <Link className="btn-primary mt-4" to={`/laws/${resumeLaw.slug}?section=${lastPosition.section}`}>
+            {t('Resume last lesson', 'শেষ পাঠে ফিরে যান')} · {tx(`law:${resumeLaw.slug}:title`, resumeLaw.titleEn, resumeLaw.titleBn)}
+          </Link>}
+          {learningLoading || contentLoading ? <p role="status" className="mt-5 text-sm text-ink-muted">{t('Loading your learning data…', 'আপনার শেখার তথ্য লোড হচ্ছে…')}</p> : progress.length === 0 ? <p className="mt-5 text-sm text-ink-muted">{t('Your lesson activity will appear here as you study.', 'আপনি পড়াশোনা শুরু করলে আপনার পাঠের অগ্রগতি এখানে দেখা যাবে।')}</p> : <ul className="mt-5 divide-y divide-line">{progress.slice(0, 5).map((item) => { const law = lawBySlug.get(item.law_slug); if (!law) return null; return <li key={item.law_slug} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-medium text-ink">{tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}</p><p className="mt-1 text-xs text-ink-muted">{item.status === 'completed' ? t('Completed', 'সম্পন্ন') : t('In progress', 'চলমান')}</p></div><Link className="text-sm font-semibold text-forest-700 hover:underline" to={`/laws/${law.slug}`}>{t('Open', 'খুলুন')}</Link></li>; })}</ul>}
+        </div>
+
+        <div className="border border-line bg-surface p-6 sm:p-8">
+          <div className="flex items-center justify-between gap-3"><h2 className="font-display text-xl text-ink">{t('Recent assessment results', 'সাম্প্রতিক মূল্যায়ন')}</h2><ClipboardCheck size={19} className="text-forest-700" /></div>
+          {learningLoading ? <p className="mt-5 text-sm text-ink-muted">{t('Loading your results…', 'ফলাফল লোড হচ্ছে…')}</p> : attempts.length === 0 ? <p className="mt-5 text-sm text-ink-muted">{t('Your submitted assessment results will appear here.', 'আপনার জমা দেওয়া মূল্যায়নের ফল এখানে দেখা যাবে।')}</p> : <ul className="mt-5 divide-y divide-line">{attempts.map((attempt) => { const law = lawBySlug.get(attempt.law_slug); return <li key={attempt.id} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-medium text-ink">{law ? tx(`law:${law.slug}:title`, law.titleEn, law.titleBn) : attempt.law_slug === '__final__' ? t('Final assessment', 'চূড়ান্ত মূল্যায়ন') : attempt.law_slug}</p><p className="mt-1 text-xs text-ink-muted">{new Date(attempt.created_at).toLocaleDateString(language)} · {attempt.score}/{attempt.total_questions}</p></div><span className={`text-sm font-semibold ${attempt.passed ? 'text-forest-700' : 'text-red-700'}`}>{attempt.percentage}%</span></li>; })}</ul>}
+        </div>
+      </section>
+
       <section aria-busy={learningLoading} className="grid gap-4 sm:grid-cols-3">
         {[
           { label: t('Lessons started', 'শুরু করা পাঠ'), value: progress.length, Icon: BookOpen },
@@ -148,23 +163,8 @@ export default function StudentDashboardPage() {
       </Link>
 
       <Link to="/student/review" className="btn-secondary">{t('Review missed questions and notes', 'ভুল প্রশ্ন ও নোট দেখুন')}</Link>
-      {resumeLaw && lastPosition && <Link className="btn-secondary" to={`/laws/${resumeLaw.slug}?section=${lastPosition.section}`}>
-        {t('Resume last lesson', 'শেষ পাঠে ফিরে যান')} · {tx(`law:${resumeLaw.slug}:title`, resumeLaw.titleEn, resumeLaw.titleBn)}
-      </Link>}
       {lastSync && <p className="text-xs text-ink-muted">Last synced <time dateTime={lastSync.toISOString()}>{lastSync.toLocaleTimeString(language)}</time> · refreshes every 15 seconds</p>}
       {(learningError || contentError) && <p role="status" className="border border-bronze-200 bg-bronze-50 p-4 text-sm text-ink-muted">{learningError || contentError}</p>}
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="border border-line bg-surface p-6 sm:p-8">
-          <div className="flex items-center justify-between gap-3"><h2 className="font-display text-xl text-ink">{t('Continue learning', 'শেখা চালিয়ে যান')}</h2><Clock3 size={19} className="text-forest-700" /></div>
-          {learningLoading || contentLoading ? <p role="status" className="mt-5 text-sm text-ink-muted">{t('Loading your learning data…', 'আপনার শেখার তথ্য লোড হচ্ছে…')}</p> : progress.length === 0 ? <p className="mt-5 text-sm text-ink-muted">{t('Your lesson activity will appear here as you study.', 'আপনি পড়াশোনা শুরু করলে আপনার পাঠের অগ্রগতি এখানে দেখা যাবে।')}</p> : <ul className="mt-5 divide-y divide-line">{progress.slice(0, 5).map((item) => { const law = lawBySlug.get(item.law_slug); if (!law) return null; return <li key={item.law_slug} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-medium text-ink">{tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}</p><p className="mt-1 text-xs text-ink-muted">{item.status === 'completed' ? t('Completed', 'সম্পন্ন') : t('In progress', 'চলমান')}</p></div><Link className="text-sm font-semibold text-forest-700 hover:underline" to={`/laws/${law.slug}`}>{t('Open', 'খুলুন')}</Link></li>; })}</ul>}
-        </div>
-
-        <div className="border border-line bg-surface p-6 sm:p-8">
-          <div className="flex items-center justify-between gap-3"><h2 className="font-display text-xl text-ink">{t('Recent assessment results', 'সাম্প্রতিক মূল্যায়ন')}</h2><ClipboardCheck size={19} className="text-forest-700" /></div>
-          {learningLoading ? <p className="mt-5 text-sm text-ink-muted">{t('Loading your results…', 'ফলাফল লোড হচ্ছে…')}</p> : attempts.length === 0 ? <p className="mt-5 text-sm text-ink-muted">{t('Your submitted assessment results will appear here.', 'আপনার জমা দেওয়া মূল্যায়নের ফল এখানে দেখা যাবে।')}</p> : <ul className="mt-5 divide-y divide-line">{attempts.map((attempt) => { const law = lawBySlug.get(attempt.law_slug); return <li key={attempt.id} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-medium text-ink">{law ? tx(`law:${law.slug}:title`, law.titleEn, law.titleBn) : attempt.law_slug === '__final__' ? t('Final assessment', 'চূড়ান্ত মূল্যায়ন') : attempt.law_slug}</p><p className="mt-1 text-xs text-ink-muted">{new Date(attempt.created_at).toLocaleDateString(language)} · {attempt.score}/{attempt.total_questions}</p></div><span className={`text-sm font-semibold ${attempt.passed ? 'text-forest-700' : 'text-red-700'}`}>{attempt.percentage}%</span></li>; })}</ul>}
-        </div>
-      </section>
 
       {bookmarks.length > 0 && <section className="border border-line bg-surface p-6 sm:p-8"><h2 className="font-display text-xl text-ink">{t('Saved lessons', 'সংরক্ষিত পাঠ')}</h2><div className="mt-5 flex flex-wrap gap-3">{bookmarks.map((slug) => { const law = lawBySlug.get(slug); return law ? <Link key={slug} className="border border-line px-4 py-3 text-sm text-forest-700 hover:border-forest-300" to={`/laws/${slug}`}>{tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}</Link> : null; })}</div></section>}
 

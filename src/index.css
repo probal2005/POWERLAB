@@ -110,6 +110,14 @@
     @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-canvas-2 hover:text-ink;
   }
 
+  .field-input {
+    @apply block min-h-11 w-full min-w-0 rounded-sm border border-ink-muted bg-surface px-3 py-2 text-sm text-ink disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .field-input:focus-visible {
+    @apply border-forest-700 outline outline-2 outline-offset-1 outline-forest-700;
+  }
+
   .surface-card {
     @apply bg-surface border border-line rounded-sm;
   }

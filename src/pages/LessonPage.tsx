@@ -328,7 +328,7 @@ export default function LessonPage() {
               {/* Language */}
               <div className="flex items-center gap-0.5 border border-line rounded-full p-0.5 bg-surface">
                 {languages.map((item) => (
-                  <ToolButton key={item.code} active={language === item.code} onClick={() => setLanguage(item.code)} title={item.nameEn}>
+                  <ToolButton key={item.code} active={language === item.code} onClick={() => setLanguage(item.code)} title={item.nameNative === item.nameEn ? item.nameNative : `${item.nameNative} (${item.nameEn})`}>
                     <span className="text-[0.65rem] font-semibold">{item.nameNative}</span>
                   </ToolButton>
                 ))}

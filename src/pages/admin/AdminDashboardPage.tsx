@@ -75,10 +75,12 @@ export default function AdminDashboardPage() {
         </Link>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2"><ViewerCount /><PlatformHealth /></div>
-      <VisitorHistory />
+      <section aria-label="Programme administration" className="flex flex-wrap gap-3">
+        <Link className="btn-secondary" to="/admin/certification">Review certification</Link>
+        <Link className="btn-secondary" to="/admin/users">Manage accounts</Link>
+        <Link className="btn-secondary" to="/admin/languages">Manage languages</Link>
+      </section>
 
-      {loading && <p role="status" className="text-sm text-ink-muted">Loading content statistics…</p>}
       {error && <div role="alert" className="flex flex-wrap items-center gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-800">
         <p>{error}</p>
         <button type="button" className="btn-secondary" onClick={() => void refresh()}>Retry</button>
@@ -225,11 +227,10 @@ export default function AdminDashboardPage() {
         </div>
       </section>
 
-      <section aria-label="Programme administration" className="flex flex-wrap gap-3">
-        <Link className="btn-secondary" to="/admin/certification">Review certification</Link>
-        <Link className="btn-secondary" to="/admin/users">Manage accounts</Link>
-        <Link className="btn-secondary" to="/admin/languages">Manage languages</Link>
-      </section>
+      <div className="grid gap-4 md:grid-cols-2"><ViewerCount /><PlatformHealth /></div>
+      <VisitorHistory />
+
+      {loading && <p role="status" className="text-sm text-ink-muted">Loading content statistics…</p>}
     </div>
   );
 }

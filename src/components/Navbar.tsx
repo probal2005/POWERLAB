@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Menu, X, ChevronDown, Languages } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
@@ -12,6 +12,15 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const location = useLocation();
+  const menu = useRef<HTMLDialogElement>(null);
+  const languageName = languages.find((item) => item.code === language)?.nameNative ?? language;
+
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 768px)');
+    const closeOnDesktop = () => { if (desktop.matches) menu.current?.close(); };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -21,14 +30,16 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    setMobileOpen(false);
+    menu.current?.close();
     setLangOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
     };
   }, [mobileOpen]);
 
@@ -76,10 +87,10 @@ export default function Navbar() {
               className="btn-ghost px-3 py-2"
               aria-expanded={langOpen}
               onKeyDown={(event) => { if (event.key === 'Escape') setLangOpen(false); }}
-              aria-label="Select language"
+              aria-label={`${languageName} · ${t('Select language', 'ভাষা নির্বাচন করুন')}`}
             >
               <Languages className="h-4 w-4" />
-              <span className="max-w-24 truncate text-xs font-semibold">{languages.find((item) => item.code === language)?.nameNative ?? language}</span>
+              <span className="max-w-24 truncate text-xs font-semibold">{languageName}</span>
               <ChevronDown className={`h-3 w-3 transition-transform ${langOpen ? 'rotate-180' : ''}`} />
             </button>
             {langOpen && (
@@ -129,20 +140,41 @@ export default function Navbar() {
 
           {/* Mobile toggle */}
           <button
-            onClick={() => setMobileOpen((o) => !o)}
+            onClick={() => {
+              setLangOpen(false);
+              menu.current?.showModal();
+              setMobileOpen(true);
+            }}
             className="md:hidden btn-ghost p-2"
-            aria-label="Toggle menu"
+            aria-label={t('Open menu', 'মেনু খুলুন')}
+            aria-controls="public-menu"
+            aria-haspopup="dialog"
             aria-expanded={mobileOpen}
           >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            <Menu className="h-5 w-5" />
           </button>
         </div>
       </nav>
 
       {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="md:hidden fixed inset-0 top-16 z-40 bg-canvas animate-fade-up overflow-y-auto">
-          <div className="container-content py-6 flex flex-col gap-1">
+      <dialog
+        ref={menu}
+        id="public-menu"
+        aria-label={t('Main menu', 'প্রধান মেনু')}
+        onClose={() => setMobileOpen(false)}
+        onClick={(event) => { if (event.target === event.currentTarget) menu.current?.close(); }}
+        className="fixed inset-x-0 top-0 m-0 max-h-[100dvh] w-full max-w-none bg-canvas p-0 text-ink backdrop:bg-ink/40"
+      >
+        <div className="container-content flex flex-col gap-1 py-5">
+          <div className="flex items-center justify-between border-b border-line pb-3">
+            <BrandLogo variant="header" />
+            <button type="button" onClick={() => menu.current?.close()} className="btn-ghost p-2" aria-label={t('Close menu', 'মেনু বন্ধ করুন')}>
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <nav aria-label={t('Main', 'প্রধান')} className="flex flex-col" onClick={(event) => {
+            if (event.target instanceof Element && event.target.closest('a')) menu.current?.close();
+          }}>
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -178,9 +210,9 @@ export default function Navbar() {
                 </>
               ) : null}
             </div>
-          </div>
+          </nav>
         </div>
-      )}
+      </dialog>
     </header>
   );
 }
