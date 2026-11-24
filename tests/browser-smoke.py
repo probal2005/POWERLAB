@@ -77,21 +77,24 @@ def test_admin(page, email, password):
     sign_in(page, email, password)
     page.wait_for_url("**/admin/certification")
 
-    page.get_by_role("button", name="Add question").click()
-    draft = page.locator("article").filter(has=page.get_by_label("Question (English)")).last
-    draft.get_by_label("Question (English)").fill("Audit fixture question")
-    draft.get_by_label("প্রশ্ন (বাংলা)").fill("পরীক্ষামূলক প্রশ্ন")
-    for index in range(1, 5):
-        draft.get_by_label(f"English option {index}").fill(f"Choice {index}")
-        draft.get_by_label(f"বাংলা বিকল্প {index}").fill(f"বিকল্প {index}")
+    bank = page.get_by_role("region", name="Final question bank")
+    expect(bank.get_by_role("textbox", name="Question (English)", exact=True)).to_have_count(0)
+    bank.get_by_role("button", name="Add question").click()
+    draft = bank.locator("article").filter(has=bank.get_by_role("textbox", name="Question (English)", exact=True)).last
+    draft.get_by_role("textbox", name="Question (English)", exact=True).fill("Audit fixture question")
+    draft.get_by_role("textbox", name="প্রশ্ন (বাংলা)", exact=True).fill("পরীক্ষামূলক প্রশ্ন")
+    for letter in "ABCD":
+        draft.get_by_role("textbox", name=f"Option {letter} (English)", exact=True).fill(f"Choice {letter}")
+        draft.get_by_role("textbox", name=f"বিকল্প {letter} (বাংলা)", exact=True).fill(f"বিকল্প {letter}")
+    draft.get_by_role("radio", name="Correct answer B").check()
     draft.get_by_role("button", name="Save question").click()
-    expect(page.get_by_role("status")).to_contain_text("Question saved.")
+    expect(draft.get_by_role("status")).to_contain_text("Question saved.")
     assert not draft.get_by_role("checkbox").is_checked()
 
     page.goto(f"{ORIGIN}/admin")
     expect(page.get_by_role("heading", name="Dashboard")).to_be_visible()
     check_layout(page)
-    assert "correctOption" not in page.evaluate("localStorage.getItem('powerlab:shared-content:v3') || ''")
+    assert "correctOption" not in page.evaluate("localStorage.getItem('powerlab:shared-content:v4') || ''")
     assert page.evaluate("localStorage.getItem('powerlab:shared-content:v2')") is None
 
     page.goto(f"{ORIGIN}/admin/users")
