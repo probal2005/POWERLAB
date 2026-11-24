@@ -1,6 +1,7 @@
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
+  Award,
   BookOpen,
   Tags,
   ClipboardList,
@@ -20,6 +21,7 @@ const navigation = [
   { label: 'Laws & Lessons', path: '/admin/laws', icon: BookOpen },
   { label: 'Categories', path: '/admin/categories', icon: Tags },
   { label: 'Assessments', path: '/admin/assessments', icon: ClipboardList },
+  { label: 'Certification', path: '/admin/certification', icon: Award },
   { label: 'Users', path: '/admin/users', icon: Users },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
 ];

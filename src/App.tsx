@@ -19,6 +19,7 @@ const StudentDashboardPage = lazy(
 const AssessmentPage = lazy(() => import('@/pages/AssessmentPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
+const CertificateManagement = lazy(() => import('@/components/admin/CertificateManagement'));
 const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'));
 const AdminDashboardPage = lazy(
   () => import('@/pages/admin/AdminDashboardPage')
@@ -87,6 +88,7 @@ export default function App() {
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="laws" element={<AdminLawsPage />} />
+                    <Route path="certification" element={<CertificateManagement />} />
                     <Route path="categories" element={<AdminSectionPage />} />
                     <Route path="assessments" element={<AdminSectionPage />} />
                     <Route path="users" element={<AdminSectionPage />} />
