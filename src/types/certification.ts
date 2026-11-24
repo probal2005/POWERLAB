@@ -80,11 +80,23 @@ export interface CertificationAssessmentResult {
   pass_percentage: number;
 }
 
+export interface CertificateDesign {
+  title_en: string;
+  title_bn: string;
+  subtitle_en: string;
+  subtitle_bn: string;
+  accent: string;
+  frame: 'classic' | 'minimal';
+  partner_name: string;
+  partner_logo: string;
+}
+
 export interface CertificationIssuedCertificate {
   certificate_id: string;
   qualification: string;
   issued_at: string;
   status: CertificateStatus;
+  design_snapshot?: CertificateDesign | null;
 }
 
 export interface CertificationVerification {

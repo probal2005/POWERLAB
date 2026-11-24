@@ -30,7 +30,7 @@ export default function CertificationPage() {
     setLoading(true); setError('');
     const [statusResult, certificateResult] = await Promise.all([
       supabase.rpc('get_certification_student_status'),
-      supabase.from('certificates').select('certificate_id,qualification,issued_at,status').eq('user_id', user.id).maybeSingle(),
+      supabase.from('certificates').select('certificate_id,qualification,issued_at,status,design_snapshot').eq('user_id', user.id).maybeSingle(),
     ]);
     if (statusResult.error) setError(statusResult.error.message);
     else setStatus(statusResult.data as CertificationStudentStatus);
@@ -97,7 +97,11 @@ export default function CertificationPage() {
   async function issueCertificate() {
     setSaving(true); setError(''); setNotice('');
     const { data, error: issueError } = await supabase.rpc('issue_powerlab_certificate');
-    if (issueError) setError(issueError.message); else { setCertificate(data as CertificationIssuedCertificate); setNotice(t('Your certificate has been issued.', 'আপনার সার্টিফিকেট ইস্যু করা হয়েছে।')); }
+    if (issueError) setError(issueError.message); else {
+      setCertificate(data as CertificationIssuedCertificate);
+      await reload();
+      setNotice(t('Your certificate has been issued.', 'আপনার সার্টিফিকেট ইস্যু করা হয়েছে।'));
+    }
     setSaving(false);
   }
 

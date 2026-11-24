@@ -1,3 +1,4 @@
+import CertificateDesignEditor from '@/components/admin/CertificateDesignEditor';
 import CertificateManagement from '@/components/admin/CertificateManagement';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -133,7 +134,11 @@ export default function AdminCertificationPage() {
   return <div className="animate-fade-up space-y-8">
     <header className="border-b border-line pb-8"><p className="eyebrow text-bronze-600">Administration</p><h1 className="mt-3 font-display text-3xl text-ink sm:text-4xl">Certification</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">Review course readiness, write the bilingual final question bank, and publish the programme only after its requirements are met.</p></header>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`border p-4 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || notice}</p>}
-    <a href="#final-question-bank" className="btn-secondary">Jump to final question bank</a>
+    <div className="flex flex-wrap gap-2">
+      <a href="#certificate-design" className="btn-secondary">Edit certificate design</a>
+      <a href="#final-question-bank" className="btn-secondary">Jump to final question bank</a>
+    </div>
+    <CertificateDesignEditor />
     <CertificateManagement />
     <section className="grid gap-4 sm:grid-cols-3"><Metric label="Approved modules" value={`${readyCount}/48`} /><Metric label="Active final questions" value={activeCount} /><Metric label="Programme" value={settings?.programme_enabled ? 'Enabled' : 'Disabled'} /></section>
     {settings && <section className="space-y-4 border border-line bg-surface p-5 sm:p-7"><div><h2 className="font-display text-xl text-ink">Programme settings</h2><p className="mt-1 text-sm text-ink-muted">Publishing and programme activation remain blocked until every module and question is ready.</p></div><label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={settings.final_assessment_published} disabled={saving} onChange={(event) => void saveSettings({ final_assessment_published: event.target.checked })} /> Publish final assessment</label><label className="flex items-center gap-3 text-sm text-ink"><input type="checkbox" checked={settings.programme_enabled} disabled={saving} onChange={(event) => void saveSettings({ programme_enabled: event.target.checked })} /> Enable certification programme</label><form className="flex flex-wrap items-end gap-3" onSubmit={(event) => {
