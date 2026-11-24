@@ -73,7 +73,7 @@ export default function VisitorHistory() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-xl text-ink">Website visit history</h2>
-          <p className="mt-1 text-sm text-ink-muted">Estimates are based on visible public pages. A return after 30 minutes of inactivity starts a new visit.</p>
+          <p className="mt-1 text-sm text-ink-muted">Counts represent browsers. Active time is estimated from visible public pages. A return after 30 minutes of inactivity starts a new visit.</p>
         </div>
         <button className="btn-secondary" type="button" onClick={() => setVersion((value) => value + 1)}>Refresh history</button>
       </div>

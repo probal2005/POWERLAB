@@ -54,7 +54,7 @@
       ]
     },
     {
-      "source": "/register",
+      "source": "/(register|forgot-password|reset-password)",
       "headers": [
         {
           "key": "X-Robots-Tag",

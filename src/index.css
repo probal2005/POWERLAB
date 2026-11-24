@@ -192,12 +192,23 @@
 }
 
 @media print {
-  body:has(.printable-certificate) main > :not(.printable-certificate) {
+  /* Keep only the certificate, its descendants, and the wrappers it needs. */
+  #root:has(.printable-certificate) :not(.printable-certificate, .printable-certificate *, :has(.printable-certificate)) {
     display: none !important;
+  }
+
+  #root:has(.printable-certificate),
+  #root :has(.printable-certificate) {
+    min-height: 0;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    background: white;
   }
 
   .printable-certificate {
     margin: 0;
+    print-color-adjust: exact;
     break-inside: avoid;
   }
 }
