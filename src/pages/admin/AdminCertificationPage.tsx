@@ -222,53 +222,53 @@ function QuestionEditor({ question, index, expanded, saving, feedback, onToggle,
         </button>
       </h3>
       <div id={panelId} hidden={!expanded} aria-labelledby={toggleId}>
-        {expanded && <form className="border-t border-line p-4 sm:p-5" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
-          <fieldset disabled={saving} className="min-w-0 space-y-5">
-            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-              <label className="min-w-0 text-sm font-medium">Question (English)
-                <textarea rows={3} className="field-input mt-1 resize-y" value={question.question_en} onChange={(event) => onChange({ question_en: event.target.value })} />
+        {expanded && <form className="question-bank-form border-t border-line bg-canvas p-4 sm:p-6" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
+          <fieldset disabled={saving} className="min-w-0 space-y-6">
+            <div className="question-bank-pair">
+              <label className="block min-w-0 text-sm font-medium text-ink">Question (English)
+                <textarea rows={3} className="question-bank-field" value={question.question_en} onChange={(event) => onChange({ question_en: event.target.value })} />
               </label>
-              <label className="min-w-0 text-sm font-medium" lang="bn">প্রশ্ন (বাংলা)
-                <textarea rows={3} className="field-input mt-1 resize-y font-bengali" value={question.question_bn} onChange={(event) => onChange({ question_bn: event.target.value })} />
+              <label className="block min-w-0 text-sm font-medium text-ink" lang="bn">প্রশ্ন (বাংলা)
+                <textarea rows={3} className="question-bank-field font-bengali" value={question.question_bn} onChange={(event) => onChange({ question_bn: event.target.value })} />
               </label>
             </div>
             <fieldset className="min-w-0 space-y-3">
               <legend className="mb-2 text-sm font-semibold">Answer choices</legend>
               {['A', 'B', 'C', 'D'].map((letter, optionIndex) => (
-                <div key={letter} className={`space-y-3 border p-3 ${question.correct_option === optionIndex ? 'border-forest-200 bg-forest-50' : 'border-line'}`}>
+                <div key={letter} className={`space-y-3 rounded-md border p-3 sm:p-4 ${question.correct_option === optionIndex ? 'border-forest-400 bg-forest-50' : 'border-line bg-surface'}`}>
                   <label className="flex items-center gap-2 text-sm font-medium">
-                    <input type="radio" name={`correct-${question.id}`} checked={question.correct_option === optionIndex}
+                    <input type="radio" className="h-4 w-4 shrink-0 accent-forest-600" name={`correct-${question.id}`} checked={question.correct_option === optionIndex}
                       onChange={() => onChange({ correct_option: optionIndex })} />
                     Correct answer {letter}
                   </label>
-                  <div className="grid min-w-0 gap-3 xl:grid-cols-2">
-                    <label className="min-w-0 text-xs font-medium">Option {letter} (English)
-                      <textarea rows={2} className="field-input mt-1 resize-y" value={optsEn[optionIndex] ?? ''}
+                  <div className="question-bank-pair">
+                    <label className="block min-w-0 text-sm font-medium text-ink">Option {letter} (English)
+                      <textarea rows={2} className="question-bank-field question-bank-option" value={optsEn[optionIndex] ?? ''}
                         onChange={(event) => changeOption('en', optionIndex, event.target.value)} />
                     </label>
-                    <label className="min-w-0 text-xs font-medium" lang="bn">বিকল্প {letter} (বাংলা)
-                      <textarea rows={2} className="field-input mt-1 resize-y font-bengali" value={optsBn[optionIndex] ?? ''}
+                    <label className="block min-w-0 text-sm font-medium text-ink" lang="bn">বিকল্প {letter} (বাংলা)
+                      <textarea rows={2} className="question-bank-field question-bank-option font-bengali" value={optsBn[optionIndex] ?? ''}
                         onChange={(event) => changeOption('bn', optionIndex, event.target.value)} />
                     </label>
                   </div>
                 </div>
               ))}
             </fieldset>
-            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-              <label className="min-w-0 text-sm font-medium">Explanation (English)
-                <textarea rows={3} className="field-input mt-1 resize-y" value={question.explanation_en} onChange={(event) => onChange({ explanation_en: event.target.value })} />
+            <div className="question-bank-pair">
+              <label className="block min-w-0 text-sm font-medium text-ink">Explanation (English)
+                <textarea rows={3} className="question-bank-field" value={question.explanation_en} onChange={(event) => onChange({ explanation_en: event.target.value })} />
               </label>
-              <label className="min-w-0 text-sm font-medium" lang="bn">ব্যাখ্যা (বাংলা)
-                <textarea rows={3} className="field-input mt-1 resize-y font-bengali" value={question.explanation_bn} onChange={(event) => onChange({ explanation_bn: event.target.value })} />
+              <label className="block min-w-0 text-sm font-medium text-ink" lang="bn">ব্যাখ্যা (বাংলা)
+                <textarea rows={3} className="question-bank-field font-bengali" value={question.explanation_bn} onChange={(event) => onChange({ explanation_bn: event.target.value })} />
               </label>
             </div>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={question.is_active} onChange={(event) => onChange({ is_active: event.target.checked })} />
+              <input type="checkbox" className="h-4 w-4 shrink-0 accent-forest-600" checked={question.is_active} onChange={(event) => onChange({ is_active: event.target.checked })} />
               Include in the published assessment
             </label>
-            <div className="flex flex-wrap gap-3 border-t border-line pt-4">
+            <div className="flex flex-col gap-3 border-t border-line pt-4 min-[440px]:flex-row">
               <button type="submit" className="btn-primary"><Save size={15} /> Save question</button>
-              <button type="button" className="btn-ghost text-red-700" onClick={onDelete}><Trash2 size={15} /> Delete question</button>
+              <button type="button" className="btn-secondary text-red-700" onClick={onDelete}><Trash2 size={15} /> Delete question</button>
             </div>
             {feedback && <p role={feedback.error ? 'alert' : 'status'} className={`text-sm ${feedback.error ? 'text-red-800' : 'text-forest-700'}`}>{feedback.text}</p>}
           </fieldset>

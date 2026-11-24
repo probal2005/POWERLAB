@@ -122,6 +122,36 @@
   }
 }
 
+/* Final assessment editor fields follow the width of the admin content area. */
+.question-bank-form {
+  container-type: inline-size;
+}
+
+.question-bank-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+@container (min-width: 38rem) {
+  .question-bank-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.question-bank-field {
+  @apply mt-1.5 block w-full resize-y rounded-md border border-stone-400 bg-surface px-3 py-2.5 text-sm leading-relaxed text-ink;
+  min-height: 7rem;
+}
+
+.question-bank-field:focus-visible {
+  @apply border-forest-500 outline outline-2 outline-offset-1 outline-forest-500;
+}
+
+.question-bank-option {
+  min-height: 5.25rem;
+}
+
 /* Custom thin scrollbar */
 .thin-scroll::-webkit-scrollbar {
   width: 6px;
