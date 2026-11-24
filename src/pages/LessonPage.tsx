@@ -34,7 +34,7 @@ const WIDTH_MAP: Record<ReadWidth, string> = {
 
 export default function LessonPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { language, setLanguage, t } = useLanguage();
+  const { language, languages, setLanguage, t, tx } = useLanguage();
   const { laws, categories, loading } = useContent();
   const { user } = useAuth();
 
@@ -48,6 +48,7 @@ export default function LessonPage() {
   const [readWidth, setReadWidth] = useState<ReadWidth>('normal');
   const [bookmarked, setBookmarked] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [learningNotice, setLearningNotice] = useState('');
   const [tocOpen, setTocOpen] = useState(false);
 
   const sectionRefs = useRef<Record<number, HTMLElement | null>>({});
@@ -84,47 +85,49 @@ export default function LessonPage() {
     }
   }, [slug, user]);
 
-  const persistBookmark = (next: boolean) => {
-    if (!slug) return;
+  const persistBookmark = async (next: boolean): Promise<boolean> => {
+    if (!slug) return false;
     if (user) {
       const request = next
         ? supabase.from('student_bookmarks').insert({ user_id: user.id, law_slug: slug })
         : supabase.from('student_bookmarks').delete().eq('user_id', user.id).eq('law_slug', slug);
-      void request.then(({ error }) => {
-        if (error) console.error('Bookmark could not be saved:', error.message);
-      });
-      return;
+      const { error } = await request;
+      if (error) { setLearningNotice('Your bookmark could not be saved. Please try again.'); return false; }
+      return true;
     }
     try {
       const bm: string[] = JSON.parse(localStorage.getItem('powerlab:bookmarks') || '[]');
       const updated = next ? [...new Set([...bm, slug])] : bm.filter((s) => s !== slug);
       localStorage.setItem('powerlab:bookmarks', JSON.stringify(updated));
-    } catch { /* ignore */ }
+      return true;
+    } catch { setLearningNotice('Your bookmark could not be saved on this device.'); return false; }
   };
 
-  const persistCompleted = (next: boolean) => {
-    if (!slug) return;
+  const persistCompleted = async (next: boolean): Promise<boolean> => {
+    if (!slug) return false;
     if (user) {
-      void supabase.from('student_law_progress').upsert({
+      const { error } = await supabase.from('student_law_progress').upsert({
         user_id: user.id, law_slug: slug, status: next ? 'completed' : 'in_progress',
         completed_at: next ? new Date().toISOString() : null, last_viewed_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,law_slug' }).then(({ error }) => {
-        if (error) console.error('Learning progress could not be saved:', error.message);
-      });
-      return;
+      }, { onConflict: 'user_id,law_slug' });
+      if (error) { setLearningNotice('Your lesson progress could not be saved. Please try again.'); return false; }
+      return true;
     }
     try {
       const cmp: string[] = JSON.parse(localStorage.getItem('powerlab:completed') || '[]');
       const updated = next ? [...new Set([...cmp, slug])] : cmp.filter((s) => s !== slug);
       localStorage.setItem('powerlab:completed', JSON.stringify(updated));
-    } catch { /* ignore */ }
+      return true;
+    } catch { setLearningNotice('Your lesson progress could not be saved on this device.'); return false; }
   };
 
   useEffect(() => {
     if (!slug || !user) return;
     void supabase.from('student_law_progress').upsert({
       user_id: user.id, law_slug: slug, last_viewed_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,law_slug', ignoreDuplicates: true });
+    }, { onConflict: 'user_id,law_slug' }).then(({ error }) => {
+      if (error) setLearningNotice('Your recent lesson activity could not be saved.');
+    });
   }, [slug, user]);
 
   // Scroll-spy for active TOC highlight
@@ -174,13 +177,13 @@ export default function LessonPage() {
 
   const toggleBookmark = () => {
     const next = !bookmarked;
-    setBookmarked(next);
-    persistBookmark(next);
+    setLearningNotice('');
+    void persistBookmark(next).then((saved) => { if (saved) setBookmarked(next); });
   };
   const toggleCompleted = () => {
     const next = !completed;
-    setCompleted(next);
-    persistCompleted(next);
+    setLearningNotice('');
+    void persistCompleted(next).then((saved) => { if (saved) setCompleted(next); });
   };
 
   const scrollToSection = (i: number) => {
@@ -215,15 +218,15 @@ export default function LessonPage() {
               </span>
               {cat && (
                 <span className="text-xs text-ink-muted border border-line rounded-full px-3 py-0.5">
-                  {language === 'en' ? cat.labelEn : cat.labelBn}
+                  {tx(`category:${cat.id}:label`, cat.labelEn, cat.labelBn)}
                 </span>
               )}
             </div>
             <h1 className={`mt-5 font-display text-3xl md:text-[2.75rem] leading-[1.15] tracking-tightish text-ink ${language === 'bn' ? 'font-bengali' : ''}`}>
-              {language === 'en' ? law.titleEn : law.titleBn}
+              {tx(`law:${law.slug}:title`, law.titleEn, law.titleBn)}
             </h1>
             <p className={`mt-5 text-lg leading-[1.7] text-ink-muted ${language === 'bn' ? 'font-bengali' : ''}`}>
-              {language === 'en' ? law.shortEn : law.shortBn}
+              {tx(`law:${law.slug}:short`, law.shortEn, law.shortBn)}
             </p>
           </div>
         </div>
@@ -283,12 +286,11 @@ export default function LessonPage() {
 
               {/* Language */}
               <div className="flex items-center gap-0.5 border border-line rounded-full p-0.5 bg-surface">
-                <ToolButton active={language === 'en'} onClick={() => setLanguage('en')} title="English">
-                  <span className="text-[0.65rem] font-semibold">EN</span>
-                </ToolButton>
-                <ToolButton active={language === 'bn'} onClick={() => setLanguage('bn')} title="বাংলা">
-                  <span className="text-[0.65rem] font-semibold">বাংলা</span>
-                </ToolButton>
+                {languages.map((item) => (
+                  <ToolButton key={item.code} active={language === item.code} onClick={() => setLanguage(item.code)} title={item.nameEn}>
+                    <span className="text-[0.65rem] font-semibold">{item.nameNative}</span>
+                  </ToolButton>
+                ))}
               </div>
 
               {/* TOC toggle (mobile) */}
@@ -303,6 +305,7 @@ export default function LessonPage() {
           </div>
         </div>
       </div>
+      {learningNotice && <div role="status" className="container-content pt-4 text-sm text-red-700">{learningNotice}</div>}
 
       {/* Body: TOC + content */}
       <div className="container-content py-10 md:py-14">
@@ -322,7 +325,7 @@ export default function LessonPage() {
                         : 'border-line text-ink-muted hover:text-ink hover:border-forest-300'
                     }`}
                   >
-                    {language === 'en' ? s.headingEn : s.headingBn}
+                    {tx(`law:${law.slug}:section:${i}:heading`, s.headingEn, s.headingBn)}
                   </button>
                 ))}
                 {(!hasFullContent) && (
@@ -355,10 +358,10 @@ export default function LessonPage() {
                       className="scroll-mt-32"
                     >
                       <h2 className={language === 'bn' ? 'font-bengali' : ''}>
-                        {language === 'en' ? s.headingEn : s.headingBn}
+                        {tx(`law:${law.slug}:section:${i}:heading`, s.headingEn, s.headingBn)}
                       </h2>
-                      {(language === 'en' ? s.bodyEn : s.bodyBn).map((para, pi) => (
-                        <p key={pi} className={language === 'bn' ? 'font-bengali' : ''}>{para}</p>
+                      {(language === 'en' ? s.bodyEn : language === 'bn' ? s.bodyBn : s.bodyEn).map((para, pi) => (
+                        <p key={pi} className={language === 'bn' ? 'font-bengali' : ''}>{language === 'en' || language === 'bn' ? para : tx(`law:${law.slug}:section:${i}:body:${pi}`, s.bodyEn[pi] ?? para, s.bodyBn[pi] ?? para)}</p>
                       ))}
                     </section>
                   ))}
@@ -368,7 +371,7 @@ export default function LessonPage() {
                   <section ref={(el) => { sectionRefs.current[0] = el; }} data-idx={0} className="scroll-mt-32">
                     <h2>{t('Summary', 'সারসংক্ষেপ')}</h2>
                     <p className={language === 'bn' ? 'font-bengali' : ''}>
-                      {language === 'en' ? law.shortEn : law.shortBn}
+                      {tx(`law:${law.slug}:short`, law.shortEn, law.shortBn)}
                     </p>
                   </section>
                   <section ref={(el) => { sectionRefs.current[1] = el; }} data-idx={1} className="scroll-mt-32">
@@ -445,7 +448,7 @@ export default function LessonPage() {
                     <div className="min-w-0">
                       <div className="text-xs text-ink-muted">{t('Previous', 'পূর্ববর্তী')}</div>
                       <div className="font-display text-sm text-ink truncate group-hover:text-forest-600 transition-colors">
-                        {language === 'en' ? prev.titleEn : prev.titleBn}
+                        {tx(`law:${prev.slug}:title`, prev.titleEn, prev.titleBn)}
                       </div>
                     </div>
                   </Link>
@@ -458,7 +461,7 @@ export default function LessonPage() {
                     <div className="min-w-0">
                       <div className="text-xs text-ink-muted">{t('Next', 'পরবর্তী')}</div>
                       <div className="font-display text-sm text-ink truncate group-hover:text-forest-600 transition-colors">
-                        {language === 'en' ? next.titleEn : next.titleBn}
+                        {tx(`law:${next.slug}:title`, next.titleEn, next.titleBn)}
                       </div>
                     </div>
                     <ArrowRight className="h-4 w-4 text-ink-muted group-hover:text-forest-600 transition-colors shrink-0" />
@@ -492,7 +495,7 @@ export default function LessonPage() {
                       : 'border-line text-ink-muted'
                   }`}
                 >
-                  {language === 'en' ? s.headingEn : s.headingBn}
+                  {tx(`law:${law.slug}:section:${i}:heading`, s.headingEn, s.headingBn)}
                 </button>
               ))}
             </nav>

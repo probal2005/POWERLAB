@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ArrowDown,
   ArrowUp,
@@ -104,11 +105,13 @@ const fieldClass =
 const labelClass = 'block text-xs font-semibold text-ink-muted';
 
 export default function AdminLawsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     laws,
     categories,
     addLaw,
     updateLaw,
+    swapLawNumbers,
     deleteLaw,
   } = useContent();
 
@@ -174,6 +177,17 @@ export default function AdminLawsPage() {
     setError('');
     setEditor(toEditorState(law));
   };
+
+  useEffect(() => {
+    const assessmentSlug = searchParams.get('assessment');
+    if (!assessmentSlug || !laws.length) return;
+    const law = laws.find((item) => item.slug === assessmentSlug);
+    if (law) {
+      setError('');
+      setEditor(toEditorState(law));
+    }
+    setSearchParams({}, { replace: true });
+  }, [laws, searchParams, setSearchParams]);
 
   const updateEditor = <K extends keyof EditorState>(
     key: K,
@@ -510,10 +524,7 @@ export default function AdminLawsPage() {
     const other = orderedLaws[target];
 
     try {
-      await Promise.all([
-        updateLaw(law.slug, { number: other.number }),
-        updateLaw(other.slug, { number: law.number }),
-      ]);
+      await swapLawNumbers(law.slug, other.slug);
     } catch (orderError) {
       setError(orderError instanceof Error ? orderError.message : 'Unable to reorder laws.');
     }

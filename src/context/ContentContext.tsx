@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Category, Law, LawSection } from '@/types/law';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
 
 type ContentContextValue = {
   laws: Law[];
@@ -11,6 +10,7 @@ type ContentContextValue = {
   getSections: (slug: string) => LawSection[] | undefined;
   addLaw: (law: Law) => Promise<void>;
   updateLaw: (slug: string, updates: Partial<Law>) => Promise<void>;
+  swapLawNumbers: (firstSlug: string, secondSlug: string) => Promise<void>;
   deleteLaw: (slug: string) => Promise<void>;
   reorderLaws: (orderedSlugs: string[]) => Promise<void>;
   addCategory: (category: Category) => Promise<void>;
@@ -21,6 +21,19 @@ type ContentContextValue = {
 
 const ContentContext = createContext<ContentContextValue | undefined>(undefined);
 type ContentPayload = { laws: Law[]; categories: Category[] };
+const CONTENT_CACHE_KEY = 'powerlab:shared-content:v2';
+
+function readCachedContent(): ContentPayload | null {
+  try {
+    const raw = localStorage.getItem(CONTENT_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { content?: ContentPayload };
+    if (!Array.isArray(cached.content?.laws) || !Array.isArray(cached.content?.categories)) return null;
+    return cached.content;
+  } catch {
+    return null;
+  }
+}
 
 function fromDatabase(row: Record<string, unknown>): Law {
   return {
@@ -42,31 +55,38 @@ function toDatabase(law: Law) {
 }
 
 export function ContentProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const [content, setContent] = useState<ContentPayload>({ laws: [], categories: [] });
-  const [loading, setLoading] = useState(true);
+  const [content, setContent] = useState<ContentPayload>(() => {
+    const cached = readCachedContent();
+    return cached ?? { laws: [], categories: [] };
+  });
+  const [loading, setLoading] = useState(() => readCachedContent() === null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    const hasCachedContent = readCachedContent() !== null;
+    if (!hasCachedContent) setLoading(true);
     const { data, error: loadError } = await supabase.rpc('get_powerlab_content');
     if (loadError) {
       setError(`Could not load shared POWERLAB content: ${loadError.message}`);
       setLoading(false);
-      return;
+      return false;
     }
     const payload = data as { laws?: Record<string, unknown>[]; categories?: Record<string, unknown>[] };
-    setContent({
+    const nextContent = {
       laws: (payload.laws ?? []).map(fromDatabase),
       categories: (payload.categories ?? []).map((category) => ({
         id: String(category.id), labelEn: String(category.label_en), labelBn: String(category.label_bn),
       })),
-    });
+    };
+    setContent(nextContent);
+    try { localStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), content: nextContent })); } catch { /* storage can be disabled or full */ }
     setError(null);
     setLoading(false);
+    return true;
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh, user?.id]);
+  // Published content is shared across roles, so auth changes must not refetch it.
+  useEffect(() => { void refresh(); }, [refresh]);
 
   const commit = useCallback(async (operation: () => PromiseLike<{ error: { message: string } | null }>) => {
     const result = await operation();
@@ -74,7 +94,9 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       setError(`Could not save shared content: ${result.error.message}`);
       throw new Error(result.error.message);
     }
-    await refresh();
+    if (!await refresh()) {
+      throw new Error('The change was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
+    }
   }, [refresh]);
 
   const addLaw = useCallback((law: Law) => commit(() => supabase.from('content_laws').insert(toDatabase(law))), [commit]);
@@ -83,14 +105,50 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     if (!current) return Promise.reject(new Error('Law not found'));
     return commit(() => supabase.from('content_laws').update(toDatabase({ ...current, ...updates })).eq('slug', slug));
   }, [commit, content.laws]);
+  const swapLawNumbers = useCallback(async (firstSlug: string, secondSlug: string) => {
+    const first = content.laws.find((law) => law.slug === firstSlug);
+    const second = content.laws.find((law) => law.slug === secondSlug);
+    if (!first || !second) throw new Error('Could not find both laws to reorder.');
+
+    const results = await Promise.all([
+      supabase.from('content_laws').update({ number: second.number, sort_order: second.number }).eq('slug', first.slug),
+      supabase.from('content_laws').update({ number: first.number, sort_order: first.number }).eq('slug', second.slug),
+    ]);
+    const updateError = results.find((result) => result.error)?.error;
+    if (updateError) {
+      setError(`Could not reorder shared content: ${updateError.message}`);
+      await refresh();
+      throw new Error(updateError.message);
+    }
+    if (!await refresh()) {
+      throw new Error('The order was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
+    }
+  }, [content.laws, refresh]);
   const deleteLaw = useCallback((slug: string) => commit(() => supabase.from('content_laws').delete().eq('slug', slug)), [commit]);
   const reorderLaws = useCallback(async (slugs: string[]) => {
     const current = new Map(content.laws.map((law) => [law.slug, law]));
-    for (let i = 0; i < slugs.length; i += 1) {
-      const law = current.get(slugs[i]);
-      if (law) await commit(() => supabase.from('content_laws').update({ sort_order: i + 1 }).eq('slug', law.slug));
+    const updates = slugs.flatMap((slug, index) => {
+      const law = current.get(slug);
+      return law ? [{ slug: law.slug, sortOrder: index + 1 }] : [];
+    });
+
+    // Avoid reloading the complete 48-law payload after every row update.
+    for (let start = 0; start < updates.length; start += 8) {
+      const batch = updates.slice(start, start + 8);
+      const results = await Promise.all(batch.map(({ slug, sortOrder }) =>
+        supabase.from('content_laws').update({ sort_order: sortOrder }).eq('slug', slug)
+      ));
+      const updateError = results.find((result) => result.error)?.error;
+      if (updateError) {
+        setError(`Could not reorder shared content: ${updateError.message}`);
+        await refresh();
+        throw new Error(updateError.message);
+      }
     }
-  }, [commit, content.laws]);
+    if (!await refresh()) {
+      throw new Error('The order was saved, but the latest shared content could not be reloaded. Refresh the page to confirm it.');
+    }
+  }, [content.laws, refresh]);
   const addCategory = useCallback((category: Category) => commit(() => supabase.from('content_categories').insert({ id: category.id, label_en: category.labelEn, label_bn: category.labelBn })), [commit]);
   const updateCategory = useCallback((id: string, updates: Partial<Category>) => {
     const current = content.categories.find((category) => category.id === id);
@@ -104,7 +162,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getSections = useCallback((slug: string) => content.laws.find((law) => law.slug === slug)?.sections, [content.laws]);
-  const value = useMemo(() => ({ ...content, loading, error, getSections, addLaw, updateLaw, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent }), [content, loading, error, getSections, addLaw, updateLaw, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent]);
+  const value = useMemo(() => ({ ...content, loading, error, getSections, addLaw, updateLaw, swapLawNumbers, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent }), [content, loading, error, getSections, addLaw, updateLaw, swapLawNumbers, deleteLaw, reorderLaws, addCategory, updateCategory, deleteCategory, resetContent]);
   return <ContentContext.Provider value={value}>{children}</ContentContext.Provider>;
 }
 

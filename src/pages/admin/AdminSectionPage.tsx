@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Construction, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Construction, Plus, Save, Search, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { useContent } from '@/context/ContentContext';
+import { supabase } from '@/lib/supabase';
+import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
 
 const sections: Record<
   string,
@@ -45,6 +47,9 @@ export default function AdminSectionPage() {
   const section = sections[key];
 
   if (key === 'categories') return <CategoryManager />;
+  if (key === 'assessments') return <AssessmentManager />;
+  if (key === 'users') return <UserManager />;
+  if (key === 'settings') return <AdminSettingsPage />;
 
   if (!section) {
     return (
@@ -150,7 +155,115 @@ function CategoryManager() {
           <button type="button" onClick={() => void removeCategory(category.id)} className="btn-ghost self-end text-red-700" aria-label={`Delete ${category.id}`}><Trash2 size={16} /></button>
         </div>;
       })}
-      {(message || error) && <p role="status" className="text-sm text-red-700">{message || error}</p>}
+      {(message || error) && <p role={error ? 'alert' : 'status'} className={`border p-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || message}</p>}
     </div>
   );
+}
+
+function AssessmentManager() {
+  const { laws, loading, error } = useContent();
+  const ordered = [...laws].sort((a, b) => a.number - b.number);
+  const published = ordered.filter((law) => law.isPublished !== false);
+  const ready = published.filter((law) => law.assessment?.isPublished && (law.assessment.questions?.length ?? 0) > 0);
+
+  return (
+    <div className="animate-fade-up space-y-7">
+      <div className="border-b border-line pb-8">
+        <p className="eyebrow text-bronze-600">Administration</p>
+        <h1 className="mt-3 font-display text-3xl tracking-tight text-ink sm:text-4xl">Assessments</h1>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">Review each law assessment, edit its bilingual questions and explanations, and publish it when the question bank is complete.</p>
+      </div>
+      {error && <p role="alert" className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
+      {loading ? <p className="text-sm text-ink-muted">Loading assessments…</p> : <>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Metric label="Published laws" value={published.length} />
+          <Metric label="Published assessments" value={ready.length} />
+          <Metric label="Needs assessment" value={published.length - ready.length} />
+        </div>
+        <div className="divide-y divide-line border border-line bg-surface">
+          {ordered.map((law) => {
+            const questionCount = law.assessment?.questions?.length ?? 0;
+            const isReady = law.isPublished !== false && law.assessment?.isPublished === true && questionCount > 0;
+            return <div key={law.slug} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-sm font-semibold text-ink">Law {String(law.number).padStart(2, '0')}: {law.titleEn}</p><p className="mt-1 text-xs text-ink-muted">{questionCount} question{questionCount === 1 ? '' : 's'} · {isReady ? 'Published' : law.isPublished === false ? 'Law unpublished' : 'Draft / not published'}</p></div>
+              <Link className="btn-secondary w-fit" to={`/admin/laws?assessment=${encodeURIComponent(law.slug)}`}><ClipboardCheck size={15} /> Edit question bank</Link>
+            </div>;
+          })}
+        </div>
+      </>}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return <div className="border border-line bg-surface p-5"><p className="font-display text-3xl text-ink">{value}</p><p className="mt-1 text-xs text-ink-muted">{label}</p></div>;
+}
+
+type ManagedUser = { id: string; email: string | null; full_name: string; role: 'student' | 'admin'; created_at: string };
+
+function UserManager() {
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  const pageSize = 100;
+  const loadUsers = useCallback(async (nextOffset: number) => {
+    setLoading(true);
+    setError('');
+    const { data, error: requestError } = await supabase.functions.invoke('powerlab-admin-users', { body: { action: 'list', offset: nextOffset } });
+    if (requestError) {
+      setError(requestError.message || 'Could not load user accounts.');
+      setUsers([]);
+    } else {
+      setUsers((data?.users ?? []) as ManagedUser[]);
+      setTotalUsers(Number(data?.total ?? 0));
+      setOffset(nextOffset);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void loadUsers(0); }, [loadUsers]);
+
+  async function changeRole(user: ManagedUser, role: ManagedUser['role']) {
+    if (user.role === role) return;
+    const action = role === 'admin' ? 'promote to administrator' : 'change to student';
+    if (!window.confirm(`Are you sure you want to ${action} ${user.email || user.full_name || 'this account'}?`)) return;
+    setSavingId(user.id);
+    setError('');
+    setMessage('');
+    const { error: requestError } = await supabase.functions.invoke('powerlab-admin-users', { body: { action: 'update-role', userId: user.id, role } });
+    if (requestError) {
+      setError(requestError.message || 'Could not update the account role.');
+    } else {
+      setUsers((current) => current.map((item) => item.id === user.id ? { ...item, role } : item));
+      setMessage('Account role updated.');
+    }
+    setSavingId('');
+  }
+
+  const filtered = users.filter((user) => `${user.full_name} ${user.email ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return <div className="animate-fade-up space-y-7">
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-8">
+      <div><p className="eyebrow text-bronze-600">Administration</p><h1 className="mt-3 font-display text-3xl tracking-tight text-ink sm:text-4xl">Users</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">Review POWERLAB accounts and manage administrator access.</p></div>
+      <div className="flex h-10 items-center gap-2 border border-line bg-surface px-3 text-xs text-ink-muted"><ShieldCheck size={16} className="text-forest-700" />Protected administrator access</div>
+    </div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <label className="relative block w-full sm:max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" /><input className="field-input pl-9" aria-label="Search this page of users" placeholder="Search this page" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <div className="flex items-center gap-3"><p className="text-sm text-ink-muted">{totalUsers} accounts · {totalUsers ? `${offset + 1}–${Math.min(offset + users.length, totalUsers)}` : '0'}</p><button type="button" className="btn-secondary" disabled={loading} onClick={() => void loadUsers(offset)}>Refresh</button></div>
+    </div>
+    {(error || message) && <p role={error ? 'alert' : 'status'} className={`border p-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-forest-200 bg-forest-50 text-forest-800'}`}>{error || message}</p>}
+    <div className="divide-y divide-line border border-line bg-surface">
+      {loading ? <p className="p-6 text-sm text-ink-muted">Loading accounts…</p> : filtered.length === 0 ? <p className="p-6 text-sm text-ink-muted">{users.length ? 'No accounts match your search.' : 'No user accounts were found.'}</p> : filtered.map((user) => <article key={user.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-canvas-2 text-forest-700"><UserRound size={18} /></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink">{user.full_name || 'Name not provided'}</p><p className="mt-1 break-all text-xs text-ink-muted">{user.email || 'Email unavailable'}</p><p className="mt-1 text-[11px] text-ink-muted">Joined {new Date(user.created_at).toLocaleDateString()}</p></div></div>
+        <label className="flex items-center gap-3 text-xs text-ink-muted">Role<select className="field-input w-auto" aria-label={`Role for ${user.email || user.full_name}`} value={user.role} disabled={savingId === user.id} onChange={(event) => void changeRole(user, event.target.value as ManagedUser['role'])}><option value="student">Student</option><option value="admin">Administrator</option></select>{savingId === user.id && <span>Saving…</span>}</label>
+      </article>)}
+    </div>
+    <div className="flex items-center justify-between gap-4"><p className="text-xs text-ink-muted">Page {Math.floor(offset / pageSize) + 1} of {Math.max(1, Math.ceil(totalUsers / pageSize))}</p><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={loading || offset === 0} onClick={() => void loadUsers(Math.max(0, offset - pageSize))}><ChevronLeft size={15} /> Previous</button><button type="button" className="btn-secondary" disabled={loading || offset + pageSize >= totalUsers} onClick={() => void loadUsers(offset + pageSize)}>Next <ChevronRight size={15} /></button></div></div>
+  </div>;
 }
