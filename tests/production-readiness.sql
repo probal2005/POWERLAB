@@ -26,7 +26,14 @@ begin
   assert jsonb_array_length(payload->'categories') = 8;
   assert not exists (select 1 from jsonb_array_elements(payload->'laws') l
     where jsonb_array_length(l->'sections') = 0 or l->'assessment' = 'null'::jsonb
-      or jsonb_array_length(l->'assessment'->'questions') = 0);
+      or jsonb_array_length(l->'assessment'->'questions') <> 3);
+  assert not exists (
+    select 1 from jsonb_path_query(payload, '$.laws[*].assessment.questions[*]') q
+    where jsonb_array_length(q->'optionsEn') <> 4
+       or jsonb_array_length(q->'optionsBn') <> 4
+       or (select count(distinct v) from jsonb_array_elements_text(q->'optionsEn') v) <> 4
+       or (select count(distinct v) from jsonb_array_elements_text(q->'optionsBn') v) <> 4
+  );
   assert not jsonb_path_exists(payload, '$.laws[*].assessment.questions[*].correctOption');
   assert not jsonb_path_exists(payload, '$.laws[*].assessment.questions[*].explanationEn');
   assert (select count(*) from public.site_languages) = 3;
@@ -57,9 +64,12 @@ begin
     raise exception 'Student could change roles';
   exception when insufficient_privilege then null;
   end;
-  result := public.submit_law_assessment('never-outshine-the-master', '[0]');
-  assert (result->>'passed')::boolean;
-  assert (select count(*) from public.student_assessment_attempts) = 1;
+  result := public.submit_law_assessment('never-outshine-the-master', '[0,2,0]');
+  assert (result->>'passed')::boolean and (result->>'percentage')::int = 67;
+  assert jsonb_array_length(result->'review') = 3;
+  result := public.submit_law_assessment('never-outshine-the-master', '[0,0,0]');
+  assert not (result->>'passed')::boolean and (result->>'percentage')::int = 33;
+  assert (select count(*) from public.student_assessment_attempts) = 2;
   begin
     perform public.submit_law_assessment('never-outshine-the-master', null);
     raise exception 'Null answers were accepted';

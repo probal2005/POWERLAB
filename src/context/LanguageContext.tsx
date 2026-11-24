@@ -43,6 +43,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [translationRevision, setTranslationRevision] = useState(0);
 
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
   const setLanguage = useCallback((code: Language) => {
     setCurrentLanguage(code);
     try {

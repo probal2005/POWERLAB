@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -55,7 +55,12 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
     assessment?.isPublished === true &&
     questions.length > 0;
 
+  const questionHeading = useRef<HTMLHeadingElement>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
+  const moveToQuestion = (index: number) => {
+    setCurrentQuestion(index);
+    requestAnimationFrame(() => questionHeading.current?.focus());
+  };
   const [answers, setAnswers] = useState<number[]>(() =>
     Array(questions.length).fill(-1)
   );
@@ -358,11 +363,11 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                     </span>
                   </div>
 
-                  <h3 className="mt-4 font-display text-xl leading-relaxed text-ink sm:text-2xl">
+                  <h3 id="assessment-question" ref={questionHeading} tabIndex={-1} className="mt-4 scroll-mt-24 font-display text-xl leading-relaxed text-ink sm:text-2xl">
                     {tx(`${assessmentTranslationPrefix}:assessment:${question.id}:question`, question.questionEn, question.questionBn)}
                   </h3>
 
-                  <div className="mt-7 grid gap-3">
+                  <div role="group" aria-labelledby="assessment-question" className="mt-7 grid gap-3">
                     {(language === 'bn' ? question.optionsBn : question.optionsEn).map((option, optionIndex) => {
                       const displayedOption = language === 'en' || language === 'bn'
                         ? option
@@ -402,11 +407,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                   <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
                     <button
                       type="button"
-                      onClick={() =>
-                        setCurrentQuestion((previous) =>
-                          Math.max(0, previous - 1)
-                        )
-                      }
+                      onClick={() => moveToQuestion(currentQuestion - 1)}
                       disabled={currentQuestion === 0}
                       className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40"
                     >
@@ -417,11 +418,7 @@ export default function AssessmentPage({ final = false }: AssessmentPageProps) {
                     {currentQuestion < questions.length - 1 ? (
                       <button
                         type="button"
-                        onClick={() =>
-                          setCurrentQuestion((previous) =>
-                            Math.min(questions.length - 1, previous + 1)
-                          )
-                        }
+                        onClick={() => moveToQuestion(currentQuestion + 1)}
                         className="btn-primary"
                       >
                         {t('Next question', 'পরবর্তী প্রশ্ন')}

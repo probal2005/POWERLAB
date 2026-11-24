@@ -253,7 +253,7 @@ export default function LessonPage() {
       {/* Reading tools bar */}
       <div className="sticky top-16 z-30 border-b border-line bg-canvas/90 backdrop-blur-md">
         <div className="container-content py-2.5">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div className="flex items-center gap-1.5">
               <button
                 onClick={toggleBookmark}
@@ -369,32 +369,32 @@ export default function LessonPage() {
               )}
 
               {hasFullContent ? (
-                <div className={FONT_SIZE_MAP[fontSize]}>
+                <div className={`${FONT_SIZE_MAP[fontSize]} space-y-9`}>
                   {sections.map((s, i) => (
                     <section
                       key={i}
                       ref={(el) => { sectionRefs.current[i] = el; }}
                       data-idx={i}
-                      className="scroll-mt-32"
+                      className="scroll-mt-40"
                     >
-                      <h2 className={language === 'bn' ? 'font-bengali' : ''}>
+                      <h2 className={`!mt-0 border-b border-line pb-3 ${language === 'bn' ? 'font-bengali' : ''}`}>
                         {tx(`law:${law.slug}:section:${i}:heading`, s.headingEn, s.headingBn)}
                       </h2>
                       {(language === 'en' ? s.bodyEn : language === 'bn' ? s.bodyBn : s.bodyEn).map((para, pi) => (
-                        <p key={pi} className={language === 'bn' ? 'font-bengali' : ''}>{language === 'en' || language === 'bn' ? para : tx(`law:${law.slug}:section:${i}:body:${pi}`, s.bodyEn[pi] ?? para, s.bodyBn[pi] ?? para)}</p>
+                        <p key={pi} className={`whitespace-pre-line !text-[inherit] ${language === 'bn' ? 'font-bengali' : ''}`}>{language === 'en' || language === 'bn' ? para : tx(`law:${law.slug}:section:${i}:body:${pi}`, s.bodyEn[pi] ?? para, s.bodyBn[pi] ?? para)}</p>
                       ))}
                     </section>
                   ))}
                 </div>
               ) : (
-                <div className={FONT_SIZE_MAP[fontSize]}>
-                  <section ref={(el) => { sectionRefs.current[0] = el; }} data-idx={0} className="scroll-mt-32">
+                <div className={`${FONT_SIZE_MAP[fontSize]} space-y-9`}>
+                  <section ref={(el) => { sectionRefs.current[0] = el; }} data-idx={0} className="scroll-mt-40">
                     <h2>{t('Summary', 'সারসংক্ষেপ')}</h2>
                     <p className={language === 'bn' ? 'font-bengali' : ''}>
                       {tx(`law:${law.slug}:short`, law.shortEn, law.shortBn)}
                     </p>
                   </section>
-                  <section ref={(el) => { sectionRefs.current[1] = el; }} data-idx={1} className="scroll-mt-32">
+                  <section ref={(el) => { sectionRefs.current[1] = el; }} data-idx={1} className="scroll-mt-40">
                     <h2>{t('Full lesson content', 'সম্পূর্ণ পাঠ সামগ্রী')}</h2>
                     <p>
                       {t(
@@ -423,9 +423,9 @@ export default function LessonPage() {
               {/* Assessment CTA */}
               <div className="mt-12 surface-card p-6 md:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-display text-lg text-ink">
+                  <h2 className="!m-0 font-display !text-lg text-ink">
                     {t('Test your understanding', 'আপনার বোঝাপড়া যাচাই করুন')}
-                  </h3>
+                  </h2>
                   <p className="mt-1.5 text-sm text-ink-muted">
                     {hasPublishedAssessment
                       ? t(
